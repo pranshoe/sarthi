@@ -57,6 +57,7 @@ export interface AgentController {
   busy: boolean;
   error: string | null;
   gmailFailed: boolean;
+  contextGathered: boolean;
 }
 
 /**
@@ -88,6 +89,8 @@ export class Conversation {
   lastRepeatDetected = false;
   /** True when the automatic Gmail open failed; the card button still works. */
   gmailFailed = false;
+  /** True when we successfully scraped context from the active tab. */
+  contextGathered = false;
   /**
    * Pre-send completion: placeholders still in the draft, asked one at a time.
    * While active, the user's messages are answers, not new intake.
@@ -120,6 +123,7 @@ export class Conversation {
       busy: this.busy,
       error: this.error,
       gmailFailed: this.gmailFailed,
+      contextGathered: this.contextGathered,
     };
   }
 
@@ -144,10 +148,16 @@ export class Conversation {
   /** First turn. The greeting comes from the model, not from us. */
   async start(): Promise<ChatTurn | null> {
     if (this.hasGreeted) return null;
-    // Set synchronously so a second mount (React StrictMode) cannot start twice
-    // and produce two greetings in the wrong order.
     this.hasGreeted = true;
-    return this.turn("The user has just opened the panel. Greet them.", false);
+    
+    // Proactively gather context from the active tab before the first turn
+    await this.scrapeActiveTab();
+
+    const directive = this.contextGathered 
+      ? `The user has just opened the panel. Greet them, and mention that you noticed their Client ID (${this.state.clientIdFolioNoDpid}) from the page they are on.` 
+      : "The user has just opened the panel. Greet them.";
+
+    return this.turn(directive, false);
   }
 
   async send(text: string): Promise<ChatTurn | null> {
@@ -314,6 +324,34 @@ export class Conversation {
       this.error = e instanceof Error ? e.message : String(e);
       this.emit();
       return null;
+    }
+  }
+
+  /** Dynamically injects a script to scrape the active tab for a Client ID */
+  private async scrapeActiveTab(): Promise<void> {
+    try {
+      if (typeof chrome === "undefined" || !chrome.tabs || !chrome.scripting) return;
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id || !tab.url || tab.url.startsWith("chrome://")) return;
+
+      const res = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          // Look for common patterns on broker dashboards (e.g. Zerodha, Groww)
+          // For the hackathon, we simply scan the DOM text for a 6-8 character uppercase alphanumeric pattern
+          const text = document.body.innerText;
+          const match = text.match(/\b([A-Z]{2}[0-9]{4,6})\b/);
+          return match ? match[1] : null;
+        },
+      });
+
+      const scrapedId = res[0]?.result;
+      if (scrapedId && typeof scrapedId === "string") {
+        this.state = { ...this.state, clientIdFolioNoDpid: scrapedId };
+        this.contextGathered = true;
+      }
+    } catch (e) {
+      console.warn("[saathi] Active tab scraping failed", e);
     }
   }
 
