@@ -32,8 +32,8 @@ const FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "g
  * will find nothing. Direct calls were removed because they needed a
  * VITE_GEMINI_KEY, which Vite inlines into the shipped JavaScript.
  */
-function proxyUrl(model: string): string {
-  return `${config.proxyUrl.replace(/\/$/, "")}/gemini/${model}:generateContent`;
+function proxyUrl(): string {
+  return `${config.proxyUrl.replace(/\/$/, "")}/llm/chat`;
 }
 
 /**
@@ -126,10 +126,10 @@ export class GeminiLLMProvider implements LLMProvider {
     let lastError = "";
 
     for (const model of chain) {
-      res = await fetch(proxyUrl(model), {
+      res = await fetch(proxyUrl(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, model }),
       });
       if (res.ok) {
         if (model !== this.model) {

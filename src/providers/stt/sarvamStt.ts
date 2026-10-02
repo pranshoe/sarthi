@@ -40,7 +40,7 @@ export class SarvamSTTProvider implements STTProvider {
     fd.append("language_code", langHint && langHint !== "auto" ? langHint : "unknown");
 
     const t0 = performance.now();
-    const res = await fetch(proxy("/stt"), { method: "POST", body: fd });
+    const res = await fetch(proxy("/speech/stt"), { method: "POST", body: fd });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
       throw new Error(`stt ${res.status}: ${detail.slice(0, 200)}`);
@@ -75,6 +75,9 @@ const MOCK_TRANSCRIPTS: Record<string, string> = {
   ta: "என் டீலர் மார்ச் மூன்றாவது நாளிலிருந்து எனக்கு விற்பனை பணத்தை வழங்கவில்லை, நாற்பது ஆயிரம் ரூபாய் இன்னும் காணப்படவில்லை.",
   kn: "ನನ್ನ ಬ್ರೋಕರ್ ಮಾರ್ಚ್ ಮೂರನೇ ದಿಂದ ನನ್ನ ಮಾರಾಟ ಹಣವನ್ನು ಜಮಾ ಮಾಡಿಲ್ಲ, ನಲವತ್ತು ಸಾವಿರ ರೂಪಾಯಿ ಇನ್ನೂ ಇಲ್ಲ.",
   te: "నా డీలర్ మార్చి మూడో నాటి నుండి నా అమ్మకాల డబ్బు జమా చేయలేదు, నలబై వేల రూపాయలు ఇంకా లేవు.",
+  bn: "আমার ব্রোকার তেসরা মার্চ থেকে আমার বিক্রির টাকা জমা করেনি, চল্লিশ হাজার টাকা এখনও বাকি আছে।",
+  mr: "माझ्या ब्रोकरने तीन मार्चपासून माझ्या विक्रीचे पैसे जमा केले नाहीत, चाळीस हजार रुपये अजूनही बाकी आहेत.",
+  gu: "મારા બ્રોકરે ત્રીજી માર્ચથી મારા વેચાણના નાણાં જમા કર્યા નથી, ચાલીસ હજાર રૂપિયા હજુ પણ બાકી છે.",
   default: "My broker has not credited my sale proceeds, forty thousand rupees are still missing.",
 };
 
@@ -106,7 +109,7 @@ export class SarvamTTSProvider implements TTSProvider {
     }
 
     const speaker = TTS_SPEAKERS[ttsLang] ?? "anushka";
-    const res = await fetch(proxy("/tts"), {
+    const res = await fetch(proxy("/speech/tts"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, language_code: ttsLang, model: "bulbul:v3", speaker }),

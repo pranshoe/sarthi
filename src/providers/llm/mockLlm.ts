@@ -1,4 +1,4 @@
-﻿import type { LLMProvider, ChatMessage } from "../types";
+import type { LLMProvider, ChatMessage } from "../types";
 import type { GrievanceState, Phase } from "@/shared/types";
 import { detectLanguage, isSmallTalk, type DetectedLang } from "@/agent/detect";
 import { findDateInText } from "@/state/dates";
@@ -481,6 +481,125 @@ const QUESTION_ORDER: Ask[] = [
 const DECLINE = /\b(don'?t know|dont know|do not know|don'?t have|no idea|not sure|can'?t find|couldn'?t find|pata nahi|pata nahi hai|theri|தெரியாது|ಗೊತ್ತಿಲ್ಲ)\b/i;
 const CLIENT_ID_MENTION = /\b(client\s*(?:id|code)|ucc|folio|dp\s*id)\b/i;
 const CORRECTION = /^(no\b|no,|nope|not right|not correct|actually\b|correction|wrong\b|galat|galat hai|nahi\b|superseeded)/i;
+
+// --- Dynamic Language Injection (Phase 3) ---
+if (BANK) {
+  BANK.greet.bn = [{ key: "greet", reply: "নমস্কার, আমি সাথী। আপনার নিজের ভাষায় বলুন কী ঘটেছে — আমি দেখব আপনি আগে কোম্পানিকে লিখেছেন কিনা, না লিখে থাকলে আমি ইমেল ড্রাফ্ট করে দেব। তারপর আমি SCORES ফর্ম পূরণ করব, আপনাকে শুধু চেক করে সাবমিট করতে হবে। তো বলুন, কী হয়েছে?" }];
+  BANK.greet.mr = [{ key: "greet", reply: "नमस्कार, मी सारथी आहे. तुमच्याच भाषेत सांगा काय झालं — मी पाहीन की तुम्ही आधी कंपनीला लिहिलं आहे की नाही, गरज पडल्यास मी तो ईमेल तयार करेन. त्यानंतर मी SCORES फॉर्म भरेन, तुम्हाला फक्त तपासायचं आणि सबमिट करायचं आहे. सांगा, काय झालं?" }];
+  BANK.greet.gu = [{ key: "greet", reply: "નમસ્તે, હું સારથી છું. તમારી પોતાની ભાષામાં કહો કે શું થયું — હું જોઈશ કે તમે પહેલાં કંપનીને લખ્યું છે કે નહીં, જરૂર પડે તો હું તે ઈમેલ ડ્રાફ્ટ કરીશ. પછી હું SCORES ફોર્મ ભરીશ, તમારે ફક્ત ચેક કરીને સબમિટ કરવાનું રહેશે. તો કહો, શું થયું?" }];
+
+  BANK.ask_issue.bn = [{ key: "ask_issue", reply: "এটি শুনে খারাপ লাগছে। নিজের ভাষায় বলুন, কী সমস্যা হয়েছে?" }];
+  BANK.ask_issue.mr = [{ key: "ask_issue", reply: "हे ऐकून वाईट वाटलं. तुमच्याच भाषेत सांगा, काय समस्या झाली?" }];
+  BANK.ask_issue.gu = [{ key: "ask_issue", reply: "આ સાંભળીને ખરાબ લાગ્યું. તમારી પોતાની ભાષામાં કહો, શું સમસ્યા થઈ?" }];
+
+  BANK.ask_entity.bn = [{ key: "ask_entity", reply: "বুঝতে পেরেছি। এটি কোন ব্রোকার বা কোম্পানির বিষয়ে?" }];
+  BANK.ask_entity.mr = [{ key: "ask_entity", reply: "समजलो. हे कोणत्या ब्रोकर किंवा कंपनीबद्दल आहे?" }];
+  BANK.ask_entity.gu = [{ key: "ask_entity", reply: "સમજી ગયો. આ કયા બ્રોકર અથવા કંપની વિશે છે?" }];
+
+  BANK.ask_ucc.bn = [{ key: "ask_optional_id", reply: "আপনার কাছে কি ক্লায়েন্ট আইডি বা UCC আছে? এটি কন্ট্রাক্ট নোটে থাকে। না পেলে অসুবিধা নেই, আমরা এটি ছাড়াই এগোতে পারি।" }];
+  BANK.ask_ucc.mr = [{ key: "ask_optional_id", reply: "तुमच्याकडे क्लायंट आयडी किंवा UCC आहे का? ते कॉन्ट्रॅक्ट नोटवर असतं. नाही सापडलं तरी चालेल, आपण पुढे जाऊ शकतो." }];
+  BANK.ask_ucc.gu = [{ key: "ask_optional_id", reply: "શું તમારી પાસે ક્લાયન્ટ આઈડી અથવા UCC છે? તે કોન્ટ્રાક્ટ નોટ પર હોય છે. ન મળે તો કોઈ વાંધો નહીં, આપણે આગળ વધી શકીએ છીએ." }];
+
+  BANK.ask_date.bn = [{ key: "ask_date", reply: "এটি প্রথম কবে হয়েছিল? আনুমানিক তারিখ হলেও চলবে।" }];
+  BANK.ask_date.mr = [{ key: "ask_date", reply: "हे पहिल्यांदा कधी घडलं? अंदाजे तारीख सांगितली तरी चालेल." }];
+  BANK.ask_date.gu = [{ key: "ask_date", reply: "આ પહેલીવાર ક્યારે બન્યું? અંદાજિત તારીખ પણ ચાલશે." }];
+
+  BANK.ask_amount.bn = [{ key: "ask_amount", reply: "আনুমানিক কত টাকার ব্যাপার? একটি ধারণা দিলেও হবে।" }];
+  BANK.ask_amount.mr = [{ key: "ask_amount", reply: "अंदाजे किती रकमेचा प्रश्न आहे? थोडी कल्पना दिली तरी चालेल." }];
+  BANK.ask_amount.gu = [{ key: "ask_amount", reply: "અંદાજે કેટલી રકમનો મામલો છે? થોડો ખ્યાલ આપશો તો પણ ચાલશે." }];
+
+  BANK.ask_category.bn = [{ key: "ask_category", reply: "আপনার নিজের ভাষায় বলুন, এটি কী ধরনের সমস্যা?" }];
+  BANK.ask_category.mr = [{ key: "ask_category", reply: "तुमच्याच भाषेत सांगा, ही कोणत्या प्रकारची समस्या आहे?" }];
+  BANK.ask_category.gu = [{ key: "ask_category", reply: "તમારી પોતાની ભાષામાં કહો, આ કયા પ્રકારની સમસ્યા છે?" }];
+
+  BANK.ask_relief.bn = [{ key: "ask_relief", reply: "এটি সমাধান করার জন্য তারা কী করুক বলে আপনি চান?" }];
+  BANK.ask_relief.mr = [{ key: "ask_relief", reply: "ही समस्या सोडवण्यासाठी त्यांनी काय करावं अशी तुमची इच्छा आहे?" }];
+  BANK.ask_relief.gu = [{ key: "ask_relief", reply: "આ સમસ્યા હલ કરવા માટે તેઓ શું કરે એવું તમે ઈચ્છો છો?" }];
+
+  BANK.ask_entity_type.bn = [{ key: "ask_entity_type", reply: "আপনার নিজের ভাষায় বলুন, এই কোম্পানিটি কে?" }];
+  BANK.ask_entity_type.mr = [{ key: "ask_entity_type", reply: "तुमच्याच भाषेत सांगा, ही कंपनी कोण आहे?" }];
+  BANK.ask_entity_type.gu = [{ key: "ask_entity_type", reply: "તમારી પોતાની ભાષામાં કહો, આ કંપની કોણ છે?" }];
+
+  BANK.explain_scores.bn = [{ key: "explain_scores", reply: "SEBI SCORES হল বিনিয়োগকারীদের জন্য সরকারের অনলাইন অভিযোগ পোর্টাল। আপনি এখানে অভিযোগ করলে SEBI তা ব্রোকার বা কোম্পানিকে পাঠায়। এগোব কি?" }];
+  BANK.explain_scores.mr = [{ key: "explain_scores", reply: "SEBI SCORES हे गुंतवणूकदारांसाठी सरकारचं ऑनलाइन तक्रार पोर्टल आहे. तुम्ही इथे तक्रार केल्यास SEBI ती ब्रोकर किंवा कंपनीला पाठवते. पुढे जायचं?" }];
+  BANK.explain_scores.gu = [{ key: "explain_scores", reply: "SEBI SCORES એ રોકાણકારો માટે સરકારનું ઓનલાઈન ફરિયાદ પોર્ટલ છે. તમે અહીં ફરિયાદ કરો છો ત્યારે SEBI તેને બ્રોકર અથવા કંપનીને મોકલે છે. આગળ વધીએ?" }];
+
+  BANK.explain_prereq.bn = [{ key: "explain_prereq", reply: "কোম্পানিকে আগে না জানালে SEBI অভিযোগ বাতিল করে দেয়। তাই আমরা আগে তাদের ইমেল করব। আমি কি ইমেল ড্রাফ্ট করে দেব?" }];
+  BANK.explain_prereq.mr = [{ key: "explain_prereq", reply: "कंपनीला आधी न कळवल्यास SEBI तक्रार रद्द करते. त्यामुळे आपण आधी त्यांना ईमेल करू. मी ईमेल तयार करू का?" }];
+  BANK.explain_prereq.gu = [{ key: "explain_prereq", reply: "જો તમે પહેલા કંપનીને જાણ ન કરી હોય તો SEBI ફરિયાદ નકારી કાઢે છે. તેથી આપણે પહેલા તેમને ઈમેલ કરીશું. શું હું ઈમેલ ડ્રાફ્ટ કરી દઉં?" }];
+
+  BANK.email_sent.bn = [{ key: "email_sent", reply: "ধন্যবাদ, এটি নোট করা হয়েছে। ওই তারিখ থেকেই অপেক্ষা করার দিন গোনা হবে। আর কিছু বলার আছে?" }];
+  BANK.email_sent.mr = [{ key: "email_sent", reply: "धन्यवाद, याची नोंद घेतली आहे. त्याच तारखेपासून वाट पाहण्याचे दिवस मोजले जातील. आणखी काही सांगायचं आहे का?" }];
+  BANK.email_sent.gu = [{ key: "email_sent", reply: "આભાર, આ નોંધી લીધું છે. એ જ તારીખથી રાહ જોવાના દિવસો ગણવામાં આવશે. બીજું કંઈ કહેવું છે?" }];
+
+  BANK.wait_notice.bn = [{ key: "wait_notice", reply: "আমার যা প্রয়োজন সব পেয়েছি। আপনি ইমেল পাঠিয়েছেন বলে SEBI তাদের উত্তর দেওয়ার সময় দেবে। এরপর আসুন, ফর্ম তৈরি থাকবে।" }];
+  BANK.wait_notice.mr = [{ key: "wait_notice", reply: "मला जे हवं ते सगळं मिळालं आहे. तुम्ही ईमेल पाठवला असल्यामुळे SEBI त्यांना उत्तर द्यायला वेळ देईल. त्यानंतर या, फॉर्म तयार असेल." }];
+  BANK.wait_notice.gu = [{ key: "wait_notice", reply: "મને જે જોઈએ તે બધું મળી ગયું છે. તમે ઈમેલ મોકલ્યો હોવાથી SEBI તેમને જવાબ આપવાનો સમય આપશે. તે પછી આવજો, ફોર્મ તૈયાર હશે." }];
+
+  BANK.confirm_summary.bn = [{ key: "confirm_summary", reply: "আমি যা বুঝেছি তা হল এই। দয়া করে পড়ে দেখুন এবং কোনো ভুল থাকলে বলুন।" }];
+  BANK.confirm_summary.mr = [{ key: "confirm_summary", reply: "मला जे समजलंय ते हे आहे. कृपया वाचून सांगा की यात काही चूक आहे का." }];
+  BANK.confirm_summary.gu = [{ key: "confirm_summary", reply: "હું જે સમજ્યો છું તે આ છે. કૃપા કરીને વાંચીને જણાવો કે કોઈ ભૂલ છે કે નહીં." }];
+
+  BANK.confirmed.bn = [{ key: "confirmed", reply: "ঠিক আছে, এটি নিশ্চিত করা হলো। আগে কি কোম্পানিকে ইমেল করব? আমি ড্রাফ্ট তৈরি করে দিচ্ছি।" }];
+  BANK.confirmed.mr = [{ key: "confirmed", reply: "ठीक आहे, हे निश्चित झालं. आधी कंपनीला ईमेल करूया का? मी ड्राफ्ट तयार करून देतो." }];
+  BANK.confirmed.gu = [{ key: "confirmed", reply: "બરાબર, આ નક્કી થઈ ગયું. પહેલા કંપનીને ઈમેલ કરીએ? હું ડ્રાફ્ટ તૈયાર કરી આપું છું." }];
+
+  BANK.offer_email.bn = [{ key: "offer_email", reply: "কোনো অসুবিধা নেই। আমি কি কোম্পানির জন্য ইমেলটি ড্রাফ্ট করে দেব?" }];
+  BANK.offer_email.mr = [{ key: "offer_email", reply: "काहीच हरकत नाही. मी कंपनीसाठी तो ईमेल तयार करून देऊ का?" }];
+  BANK.offer_email.gu = [{ key: "offer_email", reply: "કોઈ વાંધો નહીં. શું હું કંપની માટે ઈમેલ ડ્રાફ્ટ કરી દઉં?" }];
+
+  BANK.ask_email_date.bn = [{ key: "ask_email_date", reply: "আপনি এটি ঠিক কবে পাঠিয়েছিলেন? যেমন 'গতকাল' বা '১২ই মার্চ'।" }];
+  BANK.ask_email_date.mr = [{ key: "ask_email_date", reply: "तुम्ही ते नक्की कधी पाठवलं होतं? जसं 'काल' किंवा '१२ मार्च'." }];
+  BANK.ask_email_date.gu = [{ key: "ask_email_date", reply: "તમે તે બરાબર ક્યારે મોકલ્યો હતો? જેમ કે 'ગઈકાલે' અથવા '૧૨મી માર્ચ'." }];
+
+  BANK.ask_proof.bn = [{ key: "ask_proof", reply: "ধন্যবাদ। আপনার কাছে কি এর কোনো প্রমাণ আছে — স্ক্রিনশট বা টিকিট নম্বর?" }];
+  BANK.ask_proof.mr = [{ key: "ask_proof", reply: "धन्यवाद. तुमच्याकडे याचा काही पुरावा आहे का — स्क्रीनशॉट किंवा तिकीट नंबर?" }];
+  BANK.ask_proof.gu = [{ key: "ask_proof", reply: "આભાર. શું તમારી પાસે આનો કોઈ પુરાવો છે — સ્ક્રીનશોટ અથવા ટિકિટ નંબર?" }];
+
+  BANK.proof_ack.bn = [{ key: "proof_ack", reply: "নোট করা হলো, ধন্যবাদ। চলুন এগিয়ে যাই।" }];
+  BANK.proof_ack.mr = [{ key: "proof_ack", reply: "नोंद घेतली, धन्यवाद. पुढे जाऊया." }];
+  BANK.proof_ack.gu = [{ key: "proof_ack", reply: "નોંધી લીધું, આભાર. ચાલો આગળ વધીએ." }];
+
+  BANK.proof_screenshot.bn = [{ key: "proof_screenshot", reply: "চমৎকার — আপনি পরে রিভিউ ট্যাবে স্ক্রিনশটটি যোগ করতে পারবেন। আর কিছু যোগ করার আছে?" }];
+  BANK.proof_screenshot.mr = [{ key: "proof_screenshot", reply: "उत्तम — तुम्ही नंतर रिव्ह्यू टॅबमध्ये स्क्रीनशॉट जोडू शकता. आणखी काही सांगायचं आहे का?" }];
+  BANK.proof_screenshot.gu = [{ key: "proof_screenshot", reply: "સરસ — તમે પછીથી રિવ્યૂ ટેબમાં સ્ક્રીનશોટ જોડી શકશો. બીજું કંઈ ઉમેરવું છે?" }];
+
+  BANK.agree_email.bn = [{ key: "agree_email", reply: "ঠিক আছে — এই হলো ড্রাফ্ট। দেখে নিয়ে পাঠাবেন।" }];
+  BANK.agree_email.mr = [{ key: "agree_email", reply: "ठीक आहे — हा आहे ड्राफ्ट. पाहून पाठवून द्या." }];
+  BANK.agree_email.gu = [{ key: "agree_email", reply: "બરાબર — આ રહ્યો ડ્રાફ્ટ. જોઈને મોકલી આપજો." }];
+
+  ACK.bn = "বুঝতে পেরেছি, আপডেট করে দিয়েছি।";
+  ACK.mr = "समजलो, अपडेट केलं आहे.";
+  ACK.gu = "સમજી ગયો, અપડેટ કરી દીધું છે.";
+
+  DRAFT_FIELD_BANK.clientId.bn = [{ key: "draft_field", reply: "আপনার ক্লায়েন্ট আইডি বা UCC কী? স্কিপ করতে চাইলে 'skip' বলুন।" }];
+  DRAFT_FIELD_BANK.clientId.mr = [{ key: "draft_field", reply: "तुमचा क्लायंट आयडी किंवा UCC काय आहे? वगळायचं असल्यास 'skip' सांगा." }];
+  DRAFT_FIELD_BANK.clientId.gu = [{ key: "draft_field", reply: "તમારો ક્લાયન્ટ આઈડી અથવા UCC શું છે? છોડી દેવું હોય તો 'skip' કહો." }];
+
+  DRAFT_FIELD_BANK.amount.bn = [{ key: "draft_field", reply: "কত টাকার ব্যাপার, টাকায় বলুন?" }];
+  DRAFT_FIELD_BANK.amount.mr = [{ key: "draft_field", reply: "किती रकमेचा प्रश्न आहे, रुपयांमध्ये सांगा?" }];
+  DRAFT_FIELD_BANK.amount.gu = [{ key: "draft_field", reply: "કેટલી રકમનો મામલો છે, રૂપિયામાં કહો?" }];
+
+  DRAFT_FIELD_BANK.incidentDate.bn = [{ key: "draft_field", reply: "এটি প্রথম কবে হয়েছিল?" }];
+  DRAFT_FIELD_BANK.incidentDate.mr = [{ key: "draft_field", reply: "हे पहिल्यांदा कधी घडलं होतं?" }];
+  DRAFT_FIELD_BANK.incidentDate.gu = [{ key: "draft_field", reply: "આ પહેલીવાર ક્યારે બન્યું હતું?" }];
+
+  DRAFT_FIELD_BANK.soldDescription.bn = [{ key: "draft_field", reply: "ঠিক কী কেনা বা বেচা হয়েছিল?" }];
+  DRAFT_FIELD_BANK.soldDescription.mr = [{ key: "draft_field", reply: "नेमकं काय खरेदी किंवा विक्री केलं होतं?" }];
+  DRAFT_FIELD_BANK.soldDescription.gu = [{ key: "draft_field", reply: "બરાબર શું ખરીદ્યું કે વેચ્યું હતું?" }];
+
+  DRAFT_FIELD_BANK.userName.bn = [{ key: "draft_field", reply: "ইমেলে আপনার পুরো নাম কী থাকবে?" }];
+  DRAFT_FIELD_BANK.userName.mr = [{ key: "draft_field", reply: "ईमेलमध्ये तुमचं पूर्ण नाव काय असेल?" }];
+  DRAFT_FIELD_BANK.userName.gu = [{ key: "draft_field", reply: "ઈમેલમાં તમારું પૂરું નામ શું હશે?" }];
+
+  DRAFT_FIELD_BANK.userPhone.bn = [{ key: "draft_field", reply: "ইমেলের জন্য আপনার মোবাইল নম্বর কী?" }];
+  DRAFT_FIELD_BANK.userPhone.mr = [{ key: "draft_field", reply: "ईमेलसाठी तुमचा मोबाईल नंबर काय आहे?" }];
+  DRAFT_FIELD_BANK.userPhone.gu = [{ key: "draft_field", reply: "ઈમેલ માટે તમારો મોબાઈલ નંબર શું છે?" }];
+
+  DRAFT_FIELD_BANK.ready.bn = [{ key: "draft_ready", reply: "ইমেল ড্রাফ্ট তৈরি — দেখে নিয়ে পাঠিয়ে দিন।" }];
+  DRAFT_FIELD_BANK.ready.mr = [{ key: "draft_ready", reply: "ईमेल ड्राफ्ट तयार आहे — पाहून पाठवून द्या." }];
+  DRAFT_FIELD_BANK.ready.gu = [{ key: "draft_ready", reply: "ઈમેલ ડ્રાફ્ટ તૈયાર છે — જોઈને મોકલી આપો." }];
+}
 
 export class MockLLMProvider implements LLMProvider {
   readonly id = "mock";

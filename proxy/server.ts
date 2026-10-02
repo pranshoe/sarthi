@@ -200,18 +200,18 @@ async function handleSarvamLlm(req: http.IncomingMessage, res: http.ServerRespon
 async function handleGemini(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!GEMINI_KEY) return json(res, 503, { error: "GEMINI_API_KEY not set in proxy/.env" });
 
-  // Path is /gemini/<model>:generateContent
-  const url = new URL(req.url ?? "/", "http://localhost");
-  const modelPath = url.pathname.replace(/^\/gemini\//, "").replace(/^\//, "");
-
-  // JSON route: forward as text. This avoids every ArrayBuffer/pool pitfall
-  // entirely -- the previous version forwarded raw pool bytes, so Gemini
-  // received garbage starting with this file's own header comment.
   const raw = await readBody(req);
-  const payload = raw.toString("utf8");
+  const payloadStr = raw.toString("utf8");
+  
+  let payloadObj: any = {};
+  try { payloadObj = JSON.parse(payloadStr); } catch {}
+  
+  const model = payloadObj.model || "gemini-2.5-flash";
+  if (payloadObj.model) delete payloadObj.model;
+  const payload = JSON.stringify(payloadObj);
 
   const upstream = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modelPath}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: {
@@ -269,9 +269,10 @@ const server = http.createServer((req, res) => {
   }
 
   const routes: Record<string, (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>> = {
-    "/stt": handleStt,
-    "/tts": handleTts,
+    "/speech/stt": handleStt,
+    "/speech/tts": handleTts,
     "/sarvam/v1/chat/completions": handleSarvamLlm,
+    "/llm/chat": handleGemini,
   };
 
   const route = routes[url.pathname];
@@ -283,12 +284,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.pathname.startsWith("/gemini/")) {
-    handleGemini(req, res).catch((e: Error) => {
-      if (!res.headersSent) json(res, 500, { error: e.message });
-    });
-    return;
-  }
 
   json(res, 404, { error: "unknown route" });
 });
