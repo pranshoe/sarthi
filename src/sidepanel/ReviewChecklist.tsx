@@ -182,6 +182,22 @@ export function ReviewChecklist({
       >
         {report ? "Fill again" : "Fill the SCORES form for me"}
       </button>
+
+      {report && (
+        <button
+          onClick={() => {
+            const ticket = state.clientIdFolioNoDpid || "DEMO123";
+            chrome.runtime.sendMessage({ 
+              type: "alarm/set", 
+              payload: { ticketNumber: ticket, delayMinutes: 1 } 
+            });
+            alert("Follow-up tracking enabled! Saathi will notify you in 1 minute when the entity replies.");
+          }}
+          className="mt-2 w-full rounded-xl bg-slate-800 py-3 font-bold text-white hover:bg-slate-700"
+        >
+          Enable Auto Follow-up Tracking
+        </button>
+      )}
       {!derived.canAutofill && (
         <p className="text-center text-[11.5px] text-slate-500">
           {derived.missing.length > 0

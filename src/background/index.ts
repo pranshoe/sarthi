@@ -21,6 +21,21 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true })?.catch(() => {});
 
+// ---- alarms and notifications ----
+
+chrome.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name.startsWith("track_")) {
+    const ticket = alarm.name.split("_")[1];
+    chrome.notifications?.create({
+      type: "basic",
+      iconUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", // 1x1 transparent fallback
+      title: "Saathi: SEBI Update",
+      message: `Your grievance ticket #${ticket} has been updated. The entity has submitted a reply.`,
+      priority: 2,
+    });
+  }
+});
+
 // ---- proxy calls ----
 
 function proxy(path: string): string {
@@ -101,6 +116,15 @@ async function handle(msg: WorkerRequest, sender: chrome.runtime.MessageSender):
       // The LLM is called from the panel directly so we can keep the React state
       // loop simple. This branch exists for callers that prefer the worker.
       return { ok: false, error: "llm/turn is handled in the panel" };
+    }
+
+    case "alarm/set": {
+      if (chrome.alarms) {
+        chrome.alarms.create(`track_${msg.payload.ticketNumber}`, {
+          delayInMinutes: msg.payload.delayMinutes,
+        });
+      }
+      return { ok: true };
     }
 
     default:

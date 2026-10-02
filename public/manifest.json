@@ -14,7 +14,7 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "permissions": ["storage", "activeTab", "sidePanel"],
+  "permissions": ["storage", "activeTab", "sidePanel", "scripting", "alarms", "notifications"],
   "host_permissions": [
     "https://scores.sebi.gov.in/*",
     "https://*.iepf.gov.in/*",

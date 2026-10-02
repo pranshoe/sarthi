@@ -166,7 +166,8 @@ export type WorkerRequest =
   | { type: "stt/transcribe"; payload: { audio: ArrayBuffer; langHint?: string; mockMode: boolean } }
   | { type: "tts/speak"; payload: { text: string; lang: string; mockMode: boolean } }
   | { type: "panel/open"; payload: Record<string, never> }
-  | { type: "gmail/open"; payload: { to: string; subject: string; body: string } };
+  | { type: "gmail/open"; payload: { to: string; subject: string; body: string } }
+  | { type: "alarm/set"; payload: { ticketNumber: string; delayMinutes: number } };
 
 export type WorkerResponse =
   | { ok: true; turn: LLMTurnResult }
