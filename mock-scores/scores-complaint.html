@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SEBI SCORES — Complaint Registration (local replica for testing)</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f1f5f9;
+        margin: 0;
+        padding: 24px;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; }
+      .warn {
+        background: #fef3c7;
+        border: 1px solid #fcd34d;
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .sub { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+      label { display: block; font-size: 13px; font-weight: 600; margin-top: 14px; }
+      input, select, textarea {
+        width: 100%;
+        padding: 9px;
+        margin-top: 5px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font: inherit;
+        box-sizing: border-box;
+      }
+      textarea { min-height: 120px; }
+      button {
+        margin-top: 18px;
+        padding: 11px 20px;
+        background: #1a56db;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .captcha {
+        margin-top: 18px;
+        padding: 14px;
+        border: 1px dashed #94a3b8;
+        border-radius: 8px;
+        background: #f8fafc;
+        font-size: 13px;
+      }
+      #log { margin-top: 14px; font-size: 12.5px; color: #15803d; min-height: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="warn">
+        <strong>Local replica.</strong> This is a static copy of the SCORES complaint
+        form for offline testing. It is not connected to SEBI and submits nowhere.
+      </div>
+
+      <form class="card" onsubmit="return false">
+        <h1>Complaint Registration</h1>
+        <p class="sub">SEBI Complaint Redressal System</p>
+
+        <label>Category of complaint
+          <select id="category" name="category">
+            <option value="">-- Select --</option>
+            <option>Non-receipt of funds</option>
+            <option>Unauthorized trade</option>
+            <option>Account closure issue</option>
+            <option>Charges dispute</option>
+          </select>
+        </label>
+
+        <label>Type of entity
+          <select id="entityType" name="entityType">
+            <option value="">-- Select --</option>
+            <option>Registered Intermediary</option>
+            <option>Listed Company</option>
+            <option>Market Infrastructure Institution</option>
+          </select>
+        </label>
+
+        <label>Name of the entity
+          <input id="entityName" name="entityName" placeholder="e.g. Zerodha Securities" />
+        </label>
+
+        <label>UCC / Client ID
+          <input id="clientId" name="clientId" placeholder="e.g. AB1234" />
+        </label>
+
+        <label>Date of cause of action
+          <input id="incidentDate" name="incidentDate" placeholder="dd/mm/yyyy" />
+        </label>
+
+        <label>Amount involved (INR)
+          <input id="amount" name="amount" placeholder="e.g. 40000" />
+        </label>
+
+        <label>Details of complaint
+          <textarea id="complaintDetails" name="complaintDetails"></textarea>
+        </label>
+
+        <label>Supporting documents
+          <input id="supportingDocs" name="supportingDocs" type="file" accept="application/pdf" multiple />
+        </label>
+
+        <div class="captcha" id="captcha">
+          <strong>CAPTCHA:</strong> 7 3 K 9 &nbsp;
+          <em>(Saathi never touches this. You solve it yourself.)</em>
+        </div>
+
+        <button type="submit" id="submitBtn">Submit Complaint</button>
+        <div id="log"></div>
+      </form>
+    </div>
+
+    <script>
+      // Echo fills back to the console so tests can assert without a real portal.
+      const log = document.getElementById("log");
+      for (const id of ["entityName", "clientId", "incidentDate", "amount", "complaintDetails"]) {
+        const el = document.getElementById(id);
+        el.addEventListener("input", () => {
+          log.textContent = `${id} = ${el.value.slice(0, 60)}`;
+          window.__saathiReplicaState = window.__saathiReplicaState || {};
+          window.__saathiReplicaState[id] = el.value;
+        });
+      }
+      document.getElementById("submitBtn").addEventListener("click", () => {
+        log.textContent = "Submitted (replica only, nothing was sent).";
+      });
+    </script>
+  </body>
+</html>

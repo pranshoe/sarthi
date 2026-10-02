@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nodal Officer — IEPF (local replica for testing)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; background: #f1f5f9; margin: 0; padding: 24px; }
+      .wrap { max-width: 660px; margin: 0 auto; }
+      .warn { background: #fef3c7; border: 1px solid #fcd34d; padding: 10px 14px;
+        border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+      .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .sub { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+      label { display: block; font-size: 13px; font-weight: 600; margin-top: 14px; }
+      input, textarea { width: 100%; padding: 9px; margin-top: 5px;
+        border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      textarea { min-height: 110px; }
+      button { margin-top: 18px; padding: 11px 20px; background: #1a56db; color: #fff;
+        border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="warn">
+        <strong>Local replica.</strong> A stand-in for an IEPF nodal officer page so
+        the IEPF adapter can be tested offline.
+      </div>
+
+      <form class="card" onsubmit="return false">
+        <h1>Nodal Officer / IEPF</h1>
+        <p class="sub">Shareholders' Educational Trust Fund of India</p>
+
+        <label>Company name
+          <input id="companyName" name="company" placeholder="e.g. Infosys Ltd" />
+        </label>
+
+        <label>Folio / DP ID
+          <input id="folio" name="demat" placeholder="e.g. IN3002145" />
+        </label>
+
+        <label>Claim description
+          <textarea id="claimDescription" name="claim"></textarea>
+        </label>
+
+        <label>Supporting documents
+          <input id="docs" name="upload" type="file" accept="application/pdf" multiple />
+        </label>
+
+        <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400">
+          <input id="declare" type="checkbox" style="width:auto;margin-top:2px" />
+          I declare the information given is true to the best of my knowledge.
+        </label>
+
+        <button type="submit">Submit Claim</button>
+      </form>
+    </div>
+  </body>
+</html>

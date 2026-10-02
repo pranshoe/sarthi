@@ -1,0 +1,12 @@
+# Secrets - never commit
+proxy/.env
+.env
+.env.local
+*.key
+
+# Build output
+dist/
+node_modules/
+
+# Test output
+coverage/

@@ -1,0 +1,24 @@
+{
+  "$schema": "broker grievance contacts. ONLY verified addresses go here.",
+  "$note": "Every entry was checked against the broker's own grievance policy or help pages. If a broker is not listed, the app leaves the email 'to' field empty and tells the user to check the broker's website. NEVER invent an address to fill a gap.",
+  "brokers": [
+    {
+      "id": "groww",
+      "names": ["groww", "groww securities", "nextbilliontechnology"],
+      "email": "compliance@groww.in",
+      "role": "Compliance / Grievance Redressal Officer",
+      "source": "Groww Investor Grievance Redressal Policy (official PDF)",
+      "sourceUrl": "https://resources.groww.in/web-assets/media-library/2026/4/investor-grievance-redressal-policy.pdf",
+      "lastVerified": "2026-10-02"
+    },
+    {
+      "id": "upstox",
+      "names": ["upstox", "rksv", "upstox securities"],
+      "email": "complaints@upstox.com",
+      "role": "Complaints (first level); escalates to compliance@upstox.com",
+      "source": "Upstox Investor Grievances Redressal Mechanism (official PDF)",
+      "sourceUrl": "https://assets.upstox.com/website/Investor%2BGrievances%2BRedressal%2BMechanism.pdf",
+      "lastVerified": "2026-10-02"
+    }
+  ]
+}

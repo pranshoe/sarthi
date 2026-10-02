@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-600: #1a56db;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Indic scripts need a font with real glyph coverage or they fall back to tofu. */
+:lang(hi) {
+  font-family: "Noto Sans Devanagari", Inter, sans-serif;
+}
+:lang(ta) {
+  font-family: "Noto Sans Tamil", Inter, sans-serif;
+}
+:lang(kn) {
+  font-family: "Noto Sans Kannada", Inter, sans-serif;
+}
+:lang(te) {
+  font-family: "Noto Sans Telugu", Inter, sans-serif;
+}
+:lang(bn) {
+  font-family: "Noto Sans Bengali", Inter, sans-serif;
+}
+
+/* Highlight the fields the agent filled, so review is fast. */
+[data-saathi-filled="true"] {
+  box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.35) !important;
+  border-radius: 6px;
+}
+
+/* Field the agent could not resolve confidently. */
+.saathi-launcher {
+  font-family: system-ui, sans-serif;
+}
