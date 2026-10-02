@@ -3,6 +3,8 @@ import { Conversation, type AgentController } from "./conversation";
 import { Chat } from "./Chat";
 import { UnderstoodCard } from "./UnderstoodCard";
 import { ReviewChecklist } from "./ReviewChecklist";
+import { IepfValidator } from "./IepfValidator";
+import { AffidavitCopilot } from "./AffidavitCopilot";
 import { useMic } from "./MicButton";
 import { config } from "@/shared/config";
 import type { Attachment, EmailDraft, FillReport } from "@/shared/types";
@@ -10,7 +12,7 @@ import type { Attachment, EmailDraft, FillReport } from "@/shared/types";
 export function App() {
   const conv = useMemo(() => new Conversation(), []);
   const [snap, setSnap] = useState<AgentController>(conv.snapshot);
-  const [tab, setTab] = useState<"chat" | "review">("chat");
+  const [tab, setTab] = useState<"chat" | "review" | "iepf" | "affidavit">("chat");
   const [report, setReport] = useState<FillReport | null>(null);
   const [consent, setConsent] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -91,22 +93,16 @@ export function App() {
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
-      <header className="bg-gradient-to-br from-brand-600 to-violet-600 px-3 py-3 text-white">
-        <div className="flex items-center justify-between">
+      <header className="bg-gradient-to-br from-brand-600 to-violet-600 pt-3 text-white">
+        <div className="flex items-center justify-between px-3">
           <div className="flex items-center gap-2">
             <span className="text-xl">🧭</span>
             <div>
               <h1 className="text-[15px] font-bold leading-tight">Saathi</h1>
-              <p className="text-[11px] opacity-90">Investor grievance assistant</p>
+              <p className="text-[11px] opacity-90">Resilience Hub</p>
             </div>
           </div>
           <div className="flex gap-1.5">
-            <button
-              onClick={() => setTab(tab === "chat" ? "review" : "chat")}
-              className="rounded-lg bg-white/15 px-2.5 py-1.5 text-[11.5px] font-semibold"
-            >
-              {tab === "chat" ? "Review" : "Chat"}
-            </button>
             <button
               onClick={() => setShowSettings((s) => !s)}
               aria-label="Settings"
@@ -117,8 +113,35 @@ export function App() {
           </div>
         </div>
 
+        <div className="mt-3 flex gap-4 px-3 text-[12px] font-semibold">
+          <button
+            onClick={() => setTab("chat")}
+            className={`border-b-2 pb-2 ${tab === "chat" ? "border-white" : "border-transparent opacity-70"}`}
+          >
+            Agent
+          </button>
+          <button
+            onClick={() => setTab("review")}
+            className={`border-b-2 pb-2 ${tab === "review" ? "border-white" : "border-transparent opacity-70"}`}
+          >
+            Review
+          </button>
+          <button
+            onClick={() => setTab("iepf")}
+            className={`border-b-2 pb-2 ${tab === "iepf" ? "border-white" : "border-transparent opacity-70"}`}
+          >
+            IEPF OCR
+          </button>
+          <button
+            onClick={() => setTab("affidavit")}
+            className={`border-b-2 pb-2 ${tab === "affidavit" ? "border-white" : "border-transparent opacity-70"}`}
+          >
+            Affidavit
+          </button>
+        </div>
+
         {showSettings && (
-          <div className="mt-3 space-y-2 rounded-xl bg-black/20 p-2.5 text-[12px]">
+          <div className="mx-3 mb-3 mt-2 space-y-2 rounded-xl bg-black/20 p-2.5 text-[12px]">
             <label className="flex items-center justify-between gap-2">
               <span>Spoken replies (costs credits)</span>
               <input
@@ -182,7 +205,7 @@ export function App() {
             </div>
           )}
         </>
-      ) : (
+      ) : tab === "review" ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ReviewChecklist
             derived={snap.derived}
@@ -192,6 +215,14 @@ export function App() {
             onFill={() => void fill()}
             busy={snap.busy}
           />
+        </div>
+      ) : tab === "iepf" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
+          <IepfValidator />
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
+          <AffidavitCopilot />
         </div>
       )}
     </div>
