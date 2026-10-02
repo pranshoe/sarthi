@@ -1,6 +1,7 @@
-import type { LLMProvider, STTProvider, TTSProvider } from "./types";
+import type { LLMProvider, STTProvider, TTSProvider, VisionProvider } from "./types";
 import { MockLLMProvider } from "./llm/mockLlm";
 import { GeminiLLMProvider } from "./llm/gemini";
+import { GeminiVisionProvider } from "./llm/geminiVision";
 import { ClaudeLLMProvider, OpenAICompatProvider } from "./llm/openaiCompat";
 import { MockSTTProvider, MockTTSProvider, SarvamSTTProvider, SarvamTTSProvider } from "./stt/sarvamStt";
 import { config } from "@/shared/config";
@@ -55,4 +56,8 @@ export function createSTT(): STTProvider {
 export function createTTS(): TTSProvider {
   if (config.mockMode) return new MockTTSProvider();
   return new SarvamTTSProvider();
+}
+
+export function createVision(): VisionProvider {
+  return new GeminiVisionProvider();
 }

@@ -11,6 +11,12 @@ export interface LLMProvider {
   chat(messages: ChatMessage[], opts?: { jsonSchema?: unknown }): Promise<string>;
 }
 
+export interface VisionProvider {
+  readonly id: string;
+  /** Extracts structured data from images based on the prompt. Returns JSON string. */
+  analyze(imagesBase64: string[], prompt: string): Promise<string>;
+}
+
 export interface STTResult {
   text: string;
   detectedLang: string;
