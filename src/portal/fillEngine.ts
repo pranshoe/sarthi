@@ -5,6 +5,7 @@ import {
   buildComplaintBody,
   type FieldMapping,
 } from "./adapter";
+import { config } from "@/shared/config";
 
 /**
  * Fill engine.
@@ -55,6 +56,53 @@ function locate(field: FieldMapping): { el: HTMLElement | null; used: string } {
     }
   }
   return { el: null, used: field.selector };
+}
+
+/** 
+ * Self-Healing Web Automation:
+ * If the primary selector misses, extract the page inputs and ask the LLM for the new selector.
+ */
+async function healSelector(field: FieldMapping): Promise<string | null> {
+  try {
+    const inputs = Array.from(document.querySelectorAll("input, select, textarea"));
+    const domSimplified = inputs.map(el => {
+      let html = el.outerHTML;
+      if (html.length > 200) html = html.substring(0, 200) + "...";
+      return html;
+    }).join("\n");
+
+    const prompt = `You are a Self-Healing Web Automation agent. The primary CSS selector for the field "${field.label}" failed.
+Here are the current input elements on the page:
+${domSimplified}
+
+Based on the 'name', 'id', or 'placeholder' attributes above, what is the best CSS selector to find the "${field.label}" field? 
+Respond ONLY with the raw CSS selector string (e.g., input[name='new_name']), no markdown, no quotes, no explanation.`;
+
+    const proxyUrl = `${config.proxyUrl.replace(/\/$/, "")}/llm/chat`;
+    const res = await fetch(proxyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1 }
+      })
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json() as any;
+    let selector = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+    selector = selector.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();
+    
+    // Quick validation
+    if (selector && document.querySelector(selector)) {
+      return selector;
+    }
+    return null;
+  } catch (e) {
+    console.warn("[saathi] Self-healing failed for", field.label, e);
+    return null;
+  }
 }
 
 /**
@@ -150,14 +198,23 @@ export async function fillPortal(
   if (!adapter) return report;
 
   for (const field of adapter.fields) {
-    const { el, used } = locate(field);
+    let { el, used } = locate(field);
+
+    if (!el && !field.optional) {
+      // Initiate Self-Healing
+      const healedSelector = await healSelector(field);
+      if (healedSelector) {
+        el = document.querySelector(healedSelector) as HTMLElement;
+        used = `${healedSelector} (AI Healed)`;
+      }
+    }
 
     if (!el) {
       report.results.push({
         key: String(field.key),
         selector: used,
         status: field.optional ? "skipped" : "not_found",
-        detail: field.optional ? "Optional field not present" : "Field not found on this page",
+        detail: field.optional ? "Optional field not present" : "Field not found (Healing failed)",
       });
       continue;
     }
