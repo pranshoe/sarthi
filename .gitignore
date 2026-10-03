@@ -10,3 +10,9 @@ node_modules/
 
 # Test output
 coverage/
+# Generated test artifacts (regenerable, never commit)
+test-output/
+baseline-output/
+tests/conversations/fixtures/
+samples/
+eng.traineddata
