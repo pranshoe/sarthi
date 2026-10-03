@@ -41,6 +41,7 @@ describe.skipIf(!LIVE)("live proxy + Gemini", () => {
       const instructions = buildTurnInstructions({
         phase: derived.phase,
         missing: derived.missing,
+        missingOptional: derived.missingOptional,
         known: knownView(state),
         escalation: evaluateEscalation(state).message,
         nextAllowedAction: ["none", "show_summary"],

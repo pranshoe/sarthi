@@ -94,6 +94,7 @@ export async function runTurn(
   const instructions = buildTurnInstructions({
     phase: derived.phase,
     missing: derived.missing,
+    missingOptional: derived.missingOptional,
     known: knownView(ctx.state),
     escalation: derived.escalation.message,
     nextAllowedAction: NEXT_ACTION_ALLOWANCE[derived.phase] ?? ["none"],

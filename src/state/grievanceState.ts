@@ -39,6 +39,15 @@ export const REQUIRED_FOR_REVIEW: FieldKey[] = [
   "priorContact",
 ];
 
+/**
+ * Advisory tail, asked only once nothing required is missing. These never
+ * block review or autofill: the client ID is wanted by the portal but often
+ * unknown, so it must never trap the user (acceptance test 9). Kept to a
+ * single field on purpose — entityType/complaintCategory stay inferred-only
+ * and are never quiz material.
+ */
+export const OPTIONAL: FieldKey[] = ["clientIdFolioNoDpid"];
+
 export function has(state: GrievanceState, key: FieldKey): boolean {
   switch (key) {
     case "priorContact":
@@ -61,17 +70,23 @@ export function missingFields(state: GrievanceState): FieldKey[] {
 }
 
 /**
+ * The optional fields that have not been asked for yet.
+ */
+export function missingOptionalFields(state: GrievanceState): FieldKey[] {
+  const skipped = new Set(state.skippedFields);
+  return OPTIONAL.filter((k) => !skipped.has(k) && !has(state, k));
+}
+
+/**
  * What the next question should most plausibly be about: first missing
- * required-for-review field, then the client ID if still unknown. Used to
+ * required-for-review field, then unfilled optional fields. Used to
  * attribute answers (and non-answers) to the field being asked about.
  */
 export function nextFocus(state: GrievanceState): FieldKey | null {
   const missing = missingFields(state);
   if (missing.length > 0) return missing[0]!;
-  const skipped = new Set(state.skippedFields);
-  if (!skipped.has("clientIdFolioNoDpid") && !has(state, "clientIdFolioNoDpid")) {
-    return "clientIdFolioNoDpid";
-  }
+  const optional = missingOptionalFields(state);
+  if (optional.length > 0) return optional[0]!;
   return null;
 }
 

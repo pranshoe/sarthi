@@ -480,6 +480,7 @@ describe("greeting, repeats, empathy, email, rules, deadline", () => {
     const text = buildTurnInstructions({
       phase: "INTAKE",
       missing: ["entityName"],
+      missingOptional: ["clientIdFolioNoDpid"],
       known: {},
       escalation: "waiting",
       nextAllowedAction: ["none"],
@@ -492,6 +493,10 @@ describe("greeting, repeats, empathy, email, rules, deadline", () => {
     expect(text).toMatch(/SCORES_RULES/);
     expect(text).toMatch(/ONLY from these SCORES_RULES/);
     expect(text).toMatch(/scores\.sebi\.gov\.in/);
+    // Merged required/optional split: required first, optional only after.
+    expect(text).toMatch(/STILL MISSING - REQUIRED/);
+    expect(text).toMatch(/STILL MISSING - OPTIONAL/);
+    expect(text).toMatch(/clientIdFolioNoDpid/);
   });
 
   it("6a. deadline is incident date plus the limitation period", () => {

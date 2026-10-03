@@ -6,7 +6,7 @@ import type {
   LLMTurnResult,
   Phase,
 } from "@/shared/types";
-import { intakeComplete, missingFields } from "./grievanceState";
+import { intakeComplete, missingFields, missingOptionalFields } from "./grievanceState";
 import { evaluateEscalation, LIMIT_DAYS } from "./phases";
 import { parseISODate, todayISO, toLocalISO, findDateInText } from "./dates";
 import { normaliseDate } from "@/agent/guardrails";
@@ -262,6 +262,7 @@ export function computeDerived(
 ): DerivedState {
   const escalation = evaluateEscalation(state);
   const missing = missingFields(state);
+  const missingOptional = missingOptionalFields(state);
   const phase = computePhase(state, undefined, opts);
   const deadline = computeDeadline(state);
 
@@ -283,6 +284,7 @@ export function computeDerived(
   return {
     phase,
     missing,
+    missingOptional,
     confidence: confidence as Partial<Record<FieldKey, number>>,
     escalation,
     canAutofill,
