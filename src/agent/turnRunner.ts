@@ -21,7 +21,7 @@ export interface TurnContext {
 }
 
 /** Keep history cheap: full detail for recent turns, a stub for older ones. */
-const KEEP_RECENT = 4;
+const KEEP_RECENT = 2;
 
 function compactHistory(history: ChatTurn[], summary: string | null): ChatTurn[] {
   if (history.length <= KEEP_RECENT + 2) return history;
@@ -39,7 +39,7 @@ function compactHistory(history: ChatTurn[], summary: string | null): ChatTurn[]
 function summarise(turns: ChatTurn[]): string {
   const facts = turns
     .filter((t) => t.role === "user")
-    .slice(-6)
+    .slice(-3)
     .map((t) => t.text)
     .join(" / ");
   return `Earlier in the conversation the user said: ${facts}`.slice(0, 600);
@@ -93,12 +93,12 @@ export async function runTurn(
   });
 
   const messages = [
-    { role: "system" as const, content: SYSTEM_PROMPT },
+    { role: "system" as const, content: `${SYSTEM_PROMPT}\n\n${instructions}` },
     // Older context arrives as a single system turn to save tokens.
     ...compactHistory(ctx.history, null)
       .filter((t) => t.role !== "system")
       .map((t) => ({ role: t.role === "agent" ? ("assistant" as const) : ("user" as const), content: t.text })),
-    { role: "user" as const, content: `${latestUserMessage}\n\n${instructions}` },
+    { role: "user" as const, content: latestUserMessage },
   ];
 
   let repairUsed = false;
