@@ -63,6 +63,7 @@ export interface GrievanceState {
 export interface DerivedState {
   phase: Phase;
   missing: FieldKey[];
+  missingOptional: FieldKey[];
   confidence: Partial<Record<FieldKey, number>>;
   escalation: EscalationStatus;
   canAutofill: boolean;

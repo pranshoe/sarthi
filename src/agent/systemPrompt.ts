@@ -29,6 +29,7 @@ import { formatRulesForPrompt } from "@/data/scoresRules";
 export function buildTurnInstructions(input: {
   phase: string;
   missing: string[];
+  missingOptional: string[];
   known: Record<string, unknown>;
   escalation: string;
   nextAllowedAction: string[];
@@ -55,8 +56,11 @@ export function buildTurnInstructions(input: {
     "ALREADY KNOWN (never ask about these again):",
     knownLines || "  (nothing yet)",
     "",
-    "STILL MISSING (ask about at most ONE of these, most important first):",
-    input.missing.length ? input.missing.map((m) => `  - ${m}`).join("\n") : "  (nothing required is missing)",
+    "STILL MISSING - REQUIRED (You MUST ask about ONE of these first if any exist):",
+    input.missing.length ? input.missing.map((m) => `  - ${m}`).join("\n") : "  (all required fields are captured)",
+    "",
+    "STILL MISSING - OPTIONAL (Ask about ONE of these ONLY if the REQUIRED list above is completely empty):",
+    input.missingOptional.length ? input.missingOptional.map((m) => `  - ${m}`).join("\n") : "  (all optional fields are captured or skipped)",
     "",
     "EMAIL FLOW (the pre-flight email handshake; follow it exactly):",
     "- If the user agrees to the email (yes, draft it), set nextAction to draft_email. The draft is built and shown automatically; keep your reply to one short sentence.",

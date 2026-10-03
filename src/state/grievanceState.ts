@@ -60,6 +60,14 @@ export function missingFields(state: GrievanceState): FieldKey[] {
 }
 
 /**
+ * The optional fields that have not been asked for yet.
+ */
+export function missingOptionalFields(state: GrievanceState): FieldKey[] {
+  const skipped = new Set(state.skippedFields);
+  return OPTIONAL.filter((k) => !skipped.has(k) && !has(state, k));
+}
+
+/**
  * What the next question should most plausibly be about: first missing
  * required field, then unfilled optional fields. Used to attribute answers
  * (and non-answers) to the field being asked about.
@@ -67,14 +75,12 @@ export function missingFields(state: GrievanceState): FieldKey[] {
 export function nextFocus(state: GrievanceState): FieldKey | null {
   const missing = missingFields(state);
   if (missing.length > 0) return missing[0]!;
-  const skipped = new Set(state.skippedFields);
-  for (const f of OPTIONAL) {
-    if (!skipped.has(f) && !has(state, f)) return f;
-  }
+  const optional = missingOptionalFields(state);
+  if (optional.length > 0) return optional[0]!;
   return null;
 }
 
 /** True once we know enough to show the user a summary for confirmation. */
 export function intakeComplete(state: GrievanceState): boolean {
-  return missingFields(state).length === 0;
+  return missingFields(state).length === 0 && missingOptionalFields(state).length === 0;
 }
