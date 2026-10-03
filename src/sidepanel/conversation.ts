@@ -12,12 +12,15 @@ import {
   resolveContradiction,
 } from "@/state/stateReducer";
 import { runTurn } from "@/agent/turnRunner";
-import { buildEmailDraft, missingDraftFields, type DraftFieldKey } from "@/agent/emailDraft";
+import { extractFacts, onlyEmpty } from "@/agent/extractFacts";
+import { isExplicitCorrection } from "@/state/stateReducer";
+import { buildEmailDraft, gmailComposeUrl, missingDraftFields, type DraftFieldKey } from "@/agent/emailDraft";
 import { normaliseDate } from "@/agent/guardrails";
 import { findDateInText, todayISO } from "@/state/dates";
 import {
   BARE_DENIAL,
   CONTACT_CLAIM,
+  DENIAL_WITH_VERB,
   DONE_MESSAGE,
   EXPLICIT_DENIAL,
   SKIP_FIELD,
@@ -26,7 +29,7 @@ import {
   mentionsScreenshot,
 } from "@/agent/contactPhrases";
 import type { EmailDraft, FieldKey } from "@/shared/types";
-import { isSmallTalk } from "@/agent/detect";
+import { isSmallTalk, detectLanguage, type DetectedLang } from "@/agent/detect";
 
 /** True when no complaint fact has been captured yet. */
 function nothingCaptured(state: GrievanceState): boolean {
@@ -42,6 +45,66 @@ function nothingCaptured(state: GrievanceState): boolean {
     state.reliefSought === null &&
     state.priorContactProof === null
   );
+}
+
+/** Short affirmation that confirms a review, without needing the model. */
+const CONFIRM_AFFIRM =
+  /^(yes|yeah|yep|continue|ok|okay|haan|haanji|sure|go ahead|sahi hai|acha|சரி|ஆம்|ಸರಿ|ಹೌದು)\s*[.!…]*$/i;
+/** Two-word variants people actually type: "Yes continue", "ok proceed". */
+const CONFIRM_AFFIRM_LONG =
+  /^(yes|yeah|yep|ok|okay|sure|haan)[,.]?\s+(continue|proceed|go ahead|confirmed)\s*[.!…]*$/i;
+
+const CONFIRM_ACK: Record<string, string> = {
+  en: "Confirmed — moving ahead.",
+  hi: "पक्का — आगे बढ़ते हैं।",
+  ta: "உறுதி — தொடரலாம்.",
+  kn: "ಖಚಿತ — ಮುಂದುವರೆಯೋಣ.",
+};
+
+function confirmAckFor(base: string): string {
+  return CONFIRM_ACK[base] ?? CONFIRM_ACK.en!;
+}
+
+/** Short review intro when code forces the card and the model forgot it. */
+const REVIEW_INTRO: Record<string, string> = {
+  en: "Here's what I've understood — please review it below.",
+  hi: "मैंने जो समझा है वह नीचे है — कृपया जाँच लें।",
+  ta: "நான் புரிந்தது கீழே உள்ளது — சரிபார்க்கவும்.",
+  kn: "ನನಗೆ ಅರ್ಥವಾದದ್ದು ಕೆಳಗಿದೆ — ದಯವಿಟ್ಟು ಪರಿಶೀಲಿಸಿ.",
+};
+
+function reviewIntroFor(base: string): string {
+  return REVIEW_INTRO[base] ?? REVIEW_INTRO.en!;
+}
+
+/** Offline trouble lines by language, with romanized variants where tested. */
+const OFFLINE_LINES: Record<string, string> = {
+  en: "Sorry, I'm having trouble reaching my service right now. Could you please repeat that?",
+  hi: "माफ़ कीजिए, सेवा से संपर्क नहीं हो पा रहा है। कृपया दोहराएँ?",
+  ta: "மன்னிக்கவும், சேவையை அணுக முடியவில்லை. மீண்டும் சொல்லுங்கள்.",
+  kn: "ಕ್ಷಮಿಸಿ, ಸೇವೆಯನ್ನು ಸಂಪರ್ಕಿಸಲು ಆಗುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು ಪುನಃ ಹೇಳಿ.",
+};
+const OFFLINE_LATN: Record<string, string> = {
+  hi: "Maaf kijiye, seva se sampark nahi ho pa raha hai. Kripya dohrayein?",
+  // Worded with detector-list words (enakku/konjam/sollunga) so the reply
+  // still detects as ta-Latn when the model is down.
+  ta: "Mannikkavum, enakku sevaiyai anauga mudiyavillai. Konjam sollunga.",
+};
+
+/** Offline greeting: Sarthi intro + open invite, never a field question. */
+const OFFLINE_GREET: Record<string, string> = {
+  en: "Hello! I'm Sarthi. Tell me what happened in your own words, and I'll help you file it on SEBI SCORES or IEPF. So, what happened?",
+  hi: "नमस्ते! मैं सारथी हूँ। अपनी भाषा में बताइए क्या हुआ था — मैं SEBI SCORES या IEPF पर शिकायत दर्ज करने में मदद करूँगा। तो बताइए, क्या हुआ था?",
+  ta: "Vanakkam! Naan Sarthi. SEBI SCORES alladhu IEPF-il pugaar seiya udhavugiren. Enna nadandhadhu endru sollungal.",
+};
+const OFFLINE_GREET_LATN: Record<string, string> = {
+  hi: "Namaste! Main Sarthi hoon. Apni bhasha mein bataiye kya hua tha — main SEBI SCORES ya IEPF par shikayat mein madad karunga. To bataiye, kya hua tha?",
+  ta: "Vanakkam! Naan Sarthi. SEBI SCORES alladhu IEPF-il pugaar seiya udhavugiren. Enna nadandhadhu endru sollungal.",
+};
+
+function offlineLineFor(det: DetectedLang): string {
+  if (det.latin && OFFLINE_LATN[det.base]) return OFFLINE_LATN[det.base]!;
+  return OFFLINE_LINES[det.base] ?? OFFLINE_LINES.en!;
 }
 import { createLLM, createSTT, createTTS } from "@/providers/registry";
 import type { LLMProvider, STTProvider, TTSProvider } from "@/providers/types";
@@ -89,6 +152,8 @@ export class Conversation {
   lastRepeatDetected = false;
   /** True when the automatic Gmail open failed; the card button still works. */
   gmailFailed = false;
+  /** Compose URL built for the latest draft (test-visible; also the fallback). */
+  lastGmailUrl: string | null = null;
   /** True when we successfully scraped context from the active tab. */
   contextGathered = false;
   /**
@@ -165,7 +230,11 @@ export class Conversation {
     return this.turn(text, true);
   }
 
-  private async turn(text: string, fromUser: boolean): Promise<ChatTurn | null> {
+  private async turn(
+    text: string,
+    fromUser: boolean,
+    dropLastFromContext = fromUser,
+  ): Promise<ChatTurn | null> {
     this.busy = true;
     this.error = null;
     this.agreedThisTurn = false;
@@ -173,7 +242,39 @@ export class Conversation {
     if (fromUser) this.push({ role: "user", text, at: new Date().toISOString() });
     this.emit();
 
+    // CONFIRM-continue handled entirely in code: a short "yes/continue/ok"
+    // while reviewing confirms with no LLM turn for the confirmation event
+    // itself (see acknowledgeConfirm). The conversation then continues
+    // proactively via proceedAfterConfirm, so "Confirmed — moving ahead."
+    // is never a dead end.
+    if (fromUser && this.shouldConfirmInCode(text)) {
+      this.acknowledgeConfirm(text);
+      return this.proceedAfterConfirm();
+    }
+
     try {
+      // Deterministic extraction FIRST (spec A.4): stated facts enter state
+      // even if the model under-reports them — or if the model is
+      // unreachable this turn. Only empty fields (plus explicit corrections)
+      // are filled; contact fields are never touched here.
+      if (fromUser) {
+        const extra = onlyEmpty(
+          this.state,
+          extractFacts(text, { emailFlow: this.emailFlow, draftActive: !!this.draftCompletion }),
+          isExplicitCorrection(text),
+        );
+        if (Object.keys(extra).length > 0) {
+          this.state = mergeState(this.state, extra);
+          const filled = Object.keys(extra);
+          const stillSkipped = this.state.skippedFields.filter(
+            (f) => !filled.includes(f as string),
+          );
+          if (stillSkipped.length !== this.state.skippedFields.length) {
+            this.state = { ...this.state, skippedFields: stillSkipped };
+          }
+        }
+      }
+
       // Code-owned pre-processing runs before the model sees anything:
       // contact denials/claims, email-handshake dates, contradiction
       // resolutions and ask-limit skips are all decided here, not by the LLM.
@@ -185,19 +286,40 @@ export class Conversation {
 
       const focus = fromUser ? nextFocus(this.state) : null;
 
-      const { turn: modelTurn, suppressedAction, repeatDetected } = await runTurn(
-        this.llm,
-        {
-          state: this.state,
-          history: this.history.slice(0, -1), // latest is passed separately
-          hasGreeted: this.hasGreeted,
-          summaryConfirmed: this.summaryConfirmed,
-          emailFlow: this.emailFlow,
-          directives: [...directives, ...this.contradictionDirectives()],
-        },
-        text,
-      );
+      // The model is authoritative for wording, but it is also a network
+      // dependency that flaps (seen: every fallback model 404 at once). When
+      // it is unreachable, code answers with a last-resort reply that keeps
+      // every code-determined action (draft, review, date-ask) working — and
+      // never invents facts (empty updates).
+      let modelTurn: LLMTurnResult;
+      let suppressedAction: string | null = null;
+      let repeatDetected = false;
+      let rawResponse = "";
+      try {
+        const out = await runTurn(
+          this.llm,
+          {
+            state: this.state,
+            // User turns pass the latest message separately; proactive turns
+            // (greeting, post-confirm) keep the full history as context.
+            history: dropLastFromContext ? this.history.slice(0, -1) : this.history,
+            hasGreeted: this.hasGreeted,
+            summaryConfirmed: this.summaryConfirmed,
+            emailFlow: this.emailFlow,
+            directives: [...directives, ...this.contradictionDirectives()],
+          },
+          text,
+        );
+        modelTurn = out.turn;
+        suppressedAction = out.suppressedAction;
+        repeatDetected = out.repeatDetected;
+        rawResponse = out.rawResponse;
+      } catch (e) {
+        modelTurn = this.offlineFallback(text, directives);
+        rawResponse = `{"offline":true,"error":${JSON.stringify(e instanceof Error ? e.message : String(e)).slice(0, 200)}}`;
+      }
       this.lastRepeatDetected = repeatDetected;
+      this.lastRaw = rawResponse;
 
       // Mutable copy: the agreement override below may set nextAction.
       let turn = modelTurn;
@@ -238,23 +360,45 @@ export class Conversation {
       // action field. Seen live: the reply said "here is the email draft"
       // while nextAction stayed "none" (or was phase-suppressed), so no card
       // appeared and Gmail never opened. When the user plainly agrees, code
-      // attaches the draft — unless a pre-send completion just started, in
-      // which case placeholders are collected first and the draft opens after.
-      if (
-        turn.nextAction !== "draft_email" &&
-        this.agreedThisTurn &&
-        !this.draftCompletion
-      ) {
+      // attaches the draft on THIS turn — placeholders included — while a
+      // pre-send completion (if any) collects the gaps afterwards.
+      if (turn.nextAction !== "draft_email" && this.agreedThisTurn) {
         const phase = this.derived.phase;
         if (phase === "INTAKE" || phase === "PREFLIGHT_EMAIL" || phase === "CONFIRM") {
           turn = { ...turn, nextAction: "draft_email" };
         }
       }
 
+      // Explicit summary request: the user asked to review. When intake is
+      // complete the card must ride this turn even if the model forgot it
+      // (seen live: "show me a summary" answered with "I'm not sure" and no
+      // card). User messages only: proactive directives contain words like
+      // "review" themselves and must not trip this. Guarded so a premature
+      // request never confirms an empty form.
+      if (
+        fromUser &&
+        turn.nextAction !== "show_summary" &&
+        /summar|review|recap|show me/i.test(text) &&
+        this.derived.phase !== "GREETING" &&
+        this.derived.missing.length === 0
+      ) {
+        turn = { ...turn, nextAction: "show_summary" };
+        if (!/review|summary|confirm|read|understood/i.test(turn.reply)) {
+          turn = { ...turn, reply: reviewIntroFor(detectLanguage(text).base) };
+        }
+      }
+
       // Ask-limit accounting, paused while collecting placeholders (those
-      // replies are completion questions, not intake asks).
+      // replies are completion questions, not intake asks). Count a turn as
+      // an ask unless the user was asking us something (Q&A turns don't burn
+      // the field's patience) — answered fields reset to zero.
       if (!this.draftCompletion) {
-        if (focus && turn.reply.includes("?")) {
+        // A bare "??" or "…" is stonewalling, not a question: only a
+        // question mark on a message with actual words pauses the count.
+        const userAsked =
+          text.trim().endsWith("?") &&
+          /[a-zA-Z\u0900-\u097F\u0B80-\u0BFF\u0C00-\u0CFF\u0C80-\u0CFF]/.test(text);
+        if (focus && !userAsked) {
           this.askCounts[focus] = has(this.state, focus) ? 0 : (this.askCounts[focus] ?? 0) + 1;
         } else if (focus && has(this.state, focus)) {
           this.askCounts[focus] = 0;
@@ -289,6 +433,14 @@ export class Conversation {
       if (this.draftFinalize) {
         agentTurn.emailDraft = buildEmailDraft(this.state);
         this.draftFinalize = false;
+      }
+
+      // Review card rides the same turn the agent says it is reviewing.
+      if (turn.nextAction === "show_summary") {
+        agentTurn.review = {
+          shownAt: agentTurn.at,
+          missingAtShow: [...this.derived.missing],
+        };
       }
 
       this.push(agentTurn);
@@ -351,12 +503,14 @@ export class Conversation {
         this.contextGathered = true;
       }
     } catch (e) {
-      console.warn("[saathi] Active tab scraping failed", e);
+      console.warn("[sarthi] Active tab scraping failed", e);
     }
   }
 
   lastAction: LLMTurnResult["nextAction"] = "none";
   lastSuppressed: string | null = null;
+  /** Raw model JSON of the latest turn (dev overlay + harness). */
+  lastRaw: string | null = null;
 
   /**
    * Code-owned pre-processing. Runs before the model sees the message and
@@ -392,6 +546,7 @@ export class Conversation {
       } else {
         const field = this.draftCompletion.pending[0]!;
         if (SKIP_FIELD.test(t) || BARE_DENIAL.test(t)) {
+          this.markCompletionSkipped(field);
           this.advanceCompletion();
         } else if (t.endsWith("?") && t.length > 3) {
           // A question, not an answer: answer it normally, then re-ask.
@@ -403,6 +558,7 @@ export class Conversation {
             this.writeDraftAnswer(field, parsed.value);
             this.advanceCompletion();
           } else if (++this.draftCompletion.retries > 1) {
+            this.markCompletionSkipped(field);
             this.advanceCompletion(); // keep the placeholder, move on
           } else {
             directives.push(draftFieldDirective(field, true));
@@ -479,7 +635,7 @@ export class Conversation {
         directives.push(
           `[EMAIL_DATE_RECORDED] The user confirmed sending the email on ${iso}; the record is updated. Thank them briefly, then ask whether they have any proof (a screenshot or a ticket/reference number).`,
         );
-      } else if (BARE_DENIAL.test(t) || EXPLICIT_DENIAL.test(t)) {
+      } else if (BARE_DENIAL.test(t) || EXPLICIT_DENIAL.test(t) || DENIAL_WITH_VERB.test(t)) {
         this.applyDenial(directives);
       } else {
         directives.push(
@@ -491,7 +647,7 @@ export class Conversation {
 
     // 3. Awaiting sent confirmation.
     if (this.emailFlow === "awaitingSent") {
-      if (EXPLICIT_DENIAL.test(t) || BARE_DENIAL.test(t)) {
+      if (EXPLICIT_DENIAL.test(t) || BARE_DENIAL.test(t) || DENIAL_WITH_VERB.test(t)) {
         this.applyDenial(directives);
       } else if (DONE_MESSAGE.test(t)) {
         // Item 6: a "done" still needs its date before anything is confirmed.
@@ -504,7 +660,7 @@ export class Conversation {
     }
 
     // 4. Fresh explicit denial, in any phase: the safe direction applies now.
-    if (EXPLICIT_DENIAL.test(t)) {
+    if (EXPLICIT_DENIAL.test(t) || DENIAL_WITH_VERB.test(t)) {
       this.applyDenial(directives);
       return directives;
     }
@@ -558,8 +714,161 @@ export class Conversation {
     return directives;
   }
 
-  /** Shared denial outcome: nothing contacted, nothing dated, unconfirmed. */
-  private applyDenial(directives: string[]): void {
+  /**
+   * CONFIRM-continue handled entirely in code: a short "yes/continue/ok"
+   * while reviewing confirms with no LLM turn at all. Also covers the turn
+   * right after the review card: by then the phase has moved past CONFIRM
+   * (e.g. PREFLIGHT_EMAIL when contact was denied), but the affirmation
+   * still answers the card, not a question. Guarded so it never hijacks
+   * other flows (email handshake, contradictions, completion, draft offers).
+   */
+  private shouldConfirmInCode(text: string): boolean {
+    const t = text.trim();
+    if (!CONFIRM_AFFIRM.test(t) && !CONFIRM_AFFIRM_LONG.test(t)) return false;
+    if (this.emailFlow !== "none") return false;
+    if (this.draftCompletion) return false;
+    if (this.pendingContradictions.length > 0) return false;
+    if (this.derived.phase === "CONFIRM") return true;
+    const lastAgent = [...this.history].reverse().find((m) => m.role === "agent");
+    if (lastAgent?.review && this.derived.missing.length === 0) return true;
+    return false;
+  }
+
+  /**
+   * The CONFIRM event itself: pure code, zero model involvement. Sets the
+   * flag and receipts it in chat. What happens NEXT is a separate,
+   * model-driven turn (proceedAfterConfirm) — kept apart so the
+   * confirmation stays free and deterministic.
+   */
+  private acknowledgeConfirm(text: string): ChatTurn {
+    this.summaryConfirmed = true;
+    const ack: ChatTurn = {
+      role: "agent",
+      text: confirmAckFor(detectLanguage(text).base),
+      at: new Date().toISOString(),
+    };
+    this.push(ack);
+    this.lastAction = "show_summary";
+    this.emit();
+    return ack;
+  }
+
+  /**
+   * Proactive continuation right after a confirmation, so the chat never
+   * stalls on "Confirmed — moving ahead." Model-driven (one turn), with the
+   * direction chosen in code from the live phase:
+   * - AUTOFILL-ready: fill the portal for real (action forced in code, like
+   *   the draft agreement override — never left to the model's discretion).
+   * - PREFLIGHT_EMAIL: ask the single contact question that unblocks filing.
+   * - Otherwise: continue with the most important missing item.
+   * Runs through the normal turn pipeline, so offline fallback and Gmail
+   * opening apply exactly as they do for user-driven turns.
+   */
+  private async proceedAfterConfirm(): Promise<ChatTurn | null> {
+    const phase = this.derived.phase;
+    let directive: string;
+    if (phase === "AUTOFILL") {
+      directive =
+        "[CONFIRMED] The user just confirmed the review and everything is ready. " +
+        "Set nextAction to start_autofill and tell them in one short sentence that you are filling the form on the page now.";
+    } else if (phase === "PREFLIGHT_EMAIL") {
+      directive =
+        "[CONFIRMED] The user just confirmed the review. Contact with the company is still unconfirmed, which blocks filing. " +
+        "Ask exactly this question, translated into the user's language, and nothing else: " +
+        "'Have you already written to the company about this? If not, I can draft that email for you.' " +
+        "Do not hedge, do not say you are not sure — asking this question is always correct here.";
+    } else {
+      directive =
+        "[CONFIRMED] The user just confirmed the review. Continue with the single most important missing item: ask exactly ONE short question about it.";
+    }
+    const turn = await this.turn(directive, false);
+    // Autofill must never depend on the model's action field (seen: the
+    // reply says "filling now" while nextAction stays "none", so nothing
+    // fills). When code says ready, code sets the action.
+    if (turn && this.derived.phase === "AUTOFILL") {
+      this.lastAction = "start_autofill";
+      this.emit();
+    }
+    return turn;
+  }
+
+  /**
+   * Last-resort reply when the model is unreachable. Code-owned and used only
+   * then: it carries the code-determined intent for this turn (draft on
+   * agreement, card on explicit summary request, offer on denial, date-ask
+   * while awaiting a date, verified SCORES explainer for "what is SCORES?"),
+   * and a plain trouble notice otherwise. Empty updates always: code never
+   * invents facts on the model's behalf.
+   */
+  private offlineFallback(text: string, directives: string[]): LLMTurnResult {
+    const det = detectLanguage(text);
+    const phase = this.derived.phase;
+    const base: LLMTurnResult = {
+      detectedLanguage: det.tag,
+      reply: "",
+      stateUpdates: {},
+      phase,
+      nextAction: "none",
+      confidence: {},
+    };
+    if (this.agreedThisTurn && phase !== "GREETING") {
+      return {
+        ...base,
+        reply: "Here is the email draft — please review it below.",
+        nextAction: "draft_email",
+      };
+    }
+    if (
+      /summar|review|recap|show me/i.test(text) &&
+      phase !== "GREETING" &&
+      this.derived.missing.length === 0
+    ) {
+      return { ...base, reply: reviewIntroFor(det.base), nextAction: "show_summary" };
+    }
+    if (directives.some((d) => d.startsWith("[CONTACT_DENIED]"))) {
+      return {
+        ...base,
+        reply: "No problem at all. Want me to draft that email for you?",
+      };
+    }
+    if (directives.some((d) => d.startsWith("[EXPECTING_EMAIL_DATE]"))) {
+      return {
+        ...base,
+        reply: "When exactly did you send it? For example, 'yesterday' or '12th March'.",
+      };
+    }
+    if (/what is SCORES\?/i.test(text.trim())) {
+      return {
+        ...base,
+        reply:
+          "SCORES (scores.sebi.gov.in) is SEBI's online portal for investor complaints. " +
+          "If the company doesn't resolve your email, you can file there — and I'll help you prepare everything for it.",
+      };
+    }
+    if (phase === "AUTOFILL") {
+      // Confirmed and ready while the model is down: the portal fill is
+      // code anyway, so say so plainly. The action is forced by the caller.
+      return {
+        ...base,
+        reply:
+          "Confirmed — I'm filling the form on the page now. Please review it there and submit it yourself.",
+        nextAction: "start_autofill",
+      };
+    }
+    // Small talk with nothing captured: greet + invite, same shape as the
+    // live greeting (name, journey, open question — never a field ask).
+    if (isSmallTalk(text)) {
+      const det2 = detectLanguage(text);
+      const line =
+        (det2.latin ? OFFLINE_GREET_LATN[det2.base] : undefined) ??
+        OFFLINE_GREET[det2.base] ??
+        OFFLINE_GREET.en!;
+      return { ...base, reply: line };
+    }
+    return { ...base, reply: offlineLineFor(det) };
+  }
+
+  /** Shared denial outcome: nothing contacted, nothing dated, unconfirmed. */  private applyDenial(directives: string[]): void {
     this.state = {
       ...this.state,
       priorContactProof: "none",
@@ -570,7 +879,7 @@ export class Conversation {
     this.emailFlow = "none";
     this.proofTries = 0;
     directives.push(
-      "[CONTACT_DENIED] The user just said they have NOT contacted the company. Acknowledge briefly and offer to draft the email for them. Do not show the draft yet.",
+      "[CONTACT_DENIED] The user just said they have NOT contacted the company. Reply in at most two sentences: acknowledge briefly, then ask exactly this: 'Want me to draft that email for you?' Do not ask for any other detail (no company name, no date, no amount) in this reply.",
     );
   }
 
@@ -579,6 +888,26 @@ export class Conversation {
     if (!this.draftCompletion) return;
     this.draftCompletion.pending.shift();
     this.draftCompletion.retries = 0;
+  }
+
+  /**
+   * Record a completion give-up in skippedFields so the field is never asked
+   * again anywhere (intake asks consult the same list). Only fields with a
+   * skippable state key map here; the rest just keep their placeholder.
+   */
+  private markCompletionSkipped(field: DraftFieldKey): void {
+    const key =
+      field === "clientId"
+        ? "clientIdFolioNoDpid"
+        : field === "amount"
+          ? "amountInvolved"
+          : null;
+    if (key && !(this.state.skippedFields as string[]).includes(key)) {
+      this.state = {
+        ...this.state,
+        skippedFields: [...this.state.skippedFields, key as FieldKey],
+      };
+    }
   }
 
   /** Store a parsed pre-send answer straight into state. The user was asked
@@ -641,6 +970,7 @@ export class Conversation {
 
   /** Opens Gmail compose for a fresh draft. Guarded: no-ops outside the extension. */
   private async openGmail(draft: EmailDraft): Promise<void> {
+    this.lastGmailUrl = gmailComposeUrl(draft.to, draft.subject, draft.bodyEn);
     try {
       if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
         await chrome.runtime.sendMessage({
@@ -651,7 +981,7 @@ export class Conversation {
       }
     } catch (e) {
       // The card's own "Open in Gmail" button remains as the manual fallback.
-      console.warn("[saathi] automatic Gmail open failed", e);
+      console.warn("[sarthi] automatic Gmail open failed", e);
       this.gmailFailed = true;
       this.emit();
     }
@@ -680,9 +1010,59 @@ export class Conversation {
     this.emit();
   }
 
-  confirmSummary(): void {
+  /**
+   * "Looks right" on the review card. Flags the confirmation, then continues
+   * proactively so the chat moves instead of stalling. Async because the
+   * continuation is a real turn; the flag itself is set synchronously first.
+   */
+  async confirmSummary(): Promise<ChatTurn | null> {
     this.summaryConfirmed = true;
     this.emit();
+    return this.proceedAfterConfirm();
+  }
+
+  /**
+   * The user rejected the summary ("Edit"). Drops back so the next turn
+   * re-asks; no LLM call involved.
+   */
+  declineSummary(): void {
+    this.summaryConfirmed = false;
+    this.emit();
+  }
+
+  /**
+   * Everything the review card needs, computed from live state. The card is
+   * pure presentation over this payload.
+   */
+  getReview(): {
+    phase: string;
+    missing: string[];
+    canProceed: boolean;
+    deadline: { date: string | null; daysLeft: number | null; urgent: boolean; passed: boolean };
+    blockers: string[];
+    fields: Array<{ key: string; label: string; value: string | null }>;
+  } {
+    const d = this.derived;
+    const s = this.state;
+    return {
+      phase: d.phase,
+      missing: [...d.missing],
+      canProceed: d.missing.length === 0,
+      deadline: { ...d.deadline },
+      blockers: [...d.blockers],
+      fields: [
+        { key: "entityName", label: "Entity", value: s.entityName },
+        { key: "issueSummaryEnglish", label: "Issue", value: s.issueSummaryEnglish },
+        { key: "incidentDate", label: "Date", value: s.incidentDate },
+        { key: "amountInvolved", label: "Amount", value: s.amountInvolved == null ? null : `INR ${s.amountInvolved}` },
+        { key: "reliefSought", label: "Relief", value: s.reliefSought },
+        {
+          key: "priorContact",
+          label: "Contacted company",
+          value: s.priorContactProof === "none" ? "No — will email first" : s.priorContactDate ?? null,
+        },
+      ],
+    };
   }
 
   addAttachments(files: GrievanceState["attachments"]): void {
@@ -719,7 +1099,7 @@ export class Conversation {
       const blob = await this.tts.speak(short, this.state.userLanguage);
       await new Audio(URL.createObjectURL(blob)).play();
     } catch (e) {
-      console.warn("[saathi] tts failed", e);
+      console.warn("[sarthi] tts failed", e);
     }
   }
 

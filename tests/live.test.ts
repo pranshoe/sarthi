@@ -11,9 +11,9 @@ import { detectLanguage } from "@/agent/detect";
 /**
  * Live end-to-end check: real proxy, real Gemini.
  *
- * Skipped unless SAATHI_LIVE=1, because it spends tokens:
+ * Skipped unless SARTHI_LIVE=1, because it spends tokens:
  *
- *   $env:SAATHI_LIVE=1; npm run test:live
+ *   $env:SARTHI_LIVE=1; npm run test:live
  *
  * The mock suite in conversation.test.ts covers behaviour for free. This only
  * proves the wiring: proxy reachable, key valid, model honours the schema.
@@ -21,7 +21,7 @@ import { detectLanguage } from "@/agent/detect";
 
 const PROXY = process.env.VITE_PROXY_URL ?? "http://127.0.0.1:8787";
 const MODEL = process.env.VITE_GEMINI_MODEL ?? "gemini-3.5-flash-lite";
-const LIVE = process.env.SAATHI_LIVE === "1";
+const LIVE = process.env.SARTHI_LIVE === "1";
 
 describe.skipIf(!LIVE)("live proxy + Gemini", () => {
   it("completes a three-turn Tamil conversation and fills state", async () => {

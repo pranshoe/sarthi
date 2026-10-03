@@ -10,7 +10,7 @@ import { fillPortal, protectedElementsPresent } from "@/portal/fillEngine";
  * It never clicks Submit and never touches a CAPTCHA (see fillEngine).
  */
 
-const LAUNCHER_ID = "saathi-launcher";
+const LAUNCHER_ID = "sarthi-launcher";
 let report: FillReport | null = null;
 
 function adapterForThisPage() {
@@ -33,8 +33,8 @@ function mountLauncher(): void {
   });
 
   const button = document.createElement("button");
-  button.textContent = "Saathi";
-  button.title = `Open Saathi to file on ${adapter.displayName}`;
+  button.textContent = "Sarthi";
+  button.title = `Open Sarthi to file on ${adapter.displayName}`;
   Object.assign(button.style, {
     padding: "12px 18px",
     borderRadius: "999px",
@@ -49,7 +49,7 @@ function mountLauncher(): void {
   button.onclick = () => void openPanel();
 
   const badge = document.createElement("div");
-  badge.id = "saathi-badge";
+  badge.id = "sarthi-badge";
   badge.style.cssText =
     "display:none;margin-top:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;" +
     "padding:8px;font-size:11px;color:#0f172a;box-shadow:0 6px 20px rgba(0,0,0,.15);max-width:240px";
@@ -63,12 +63,12 @@ async function openPanel(): Promise<void> {
   try {
     await chrome.runtime.sendMessage({ type: "panel/open", payload: {} });
   } catch {
-    console.warn("[saathi] could not open the side panel");
+    console.warn("[sarthi] could not open the side panel");
   }
 }
 
 function renderBadge(): void {
-  const badge = document.getElementById("saathi-badge");
+  const badge = document.getElementById("sarthi-badge");
   if (!badge || !report) return;
   const rows = report.results
     .map((r) => {
@@ -84,7 +84,7 @@ function renderBadge(): void {
     })
     .join("");
   badge.innerHTML =
-    `<strong>Saathi filled ${report.results.filter((r) => r.status === "filled").length} field(s)</strong>` +
+    `<strong>Sarthi filled ${report.results.filter((r) => r.status === "filled").length} field(s)</strong>` +
     rows +
     `<div style="margin-top:6px;border-top:1px solid #e2e8f0;padding-top:6px;color:#b91c1c">` +
     `Still yours: ${protectedElementsPresent().join(", ") || "the Submit button"}</div>`;
@@ -96,37 +96,62 @@ function escapeHtml(s: string): string {
 }
 
 chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse) => {
-  (async (): Promise<ContentResponse> => {
-    try {
-      if (msg.type === "portal/detect") {
-        return { ok: true, portal: adapterForThisPage()?.id ?? null };
-      }
-
-      if (msg.type === "portal/fill") {
-        const state = msg.payload.state as GrievanceState;
-        report = await fillPortal(state);
-        renderBadge();
-        return { ok: true, filled: report };
-      }
-
-      if (msg.type === "portal/highlight") {
-        document
-          .querySelectorAll("[data-saathi-filled]")
-          .forEach((el) => ((el as HTMLElement).style.boxShadow = ""));
-        for (const sel of msg.payload.fields) {
-          document.querySelectorAll(sel).forEach((el) => {
-            (el as HTMLElement).style.boxShadow = "0 0 0 3px rgba(26,86,219,.4)";
-            (el as HTMLElement).style.transition = "box-shadow .3s ease";
-          });
-        }
-        return { ok: true, filled: report ?? emptyReport() };
-      }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
-    return { ok: false, error: "unknown request" };
-  })().then(sendResponse);
+  handleContentMessage(msg).then(sendResponse);
   return true; // async response
+});
+
+/**
+ * Shared handler behind both the prod path (chrome.tabs.sendMessage from the
+ * side panel, same as App.fill) and the S15 test hook below.
+ */
+async function handleContentMessage(msg: ContentRequest): Promise<ContentResponse> {
+  try {
+    if (msg.type === "portal/detect") {
+      return { ok: true, portal: adapterForThisPage()?.id ?? null };
+    }
+
+    if (msg.type === "portal/fill") {
+      const state = msg.payload.state as GrievanceState;
+      report = await fillPortal(state);
+      renderBadge();
+      return { ok: true, filled: report };
+    }
+
+    if (msg.type === "portal/highlight") {
+      document
+        .querySelectorAll("[data-sarthi-filled]")
+        .forEach((el) => ((el as HTMLElement).style.boxShadow = ""));
+      for (const sel of msg.payload.fields) {
+        document.querySelectorAll(sel).forEach((el) => {
+          (el as HTMLElement).style.boxShadow = "0 0 0 3px rgba(26,86,219,.4)";
+          (el as HTMLElement).style.transition = "box-shadow .3s ease";
+        });
+      }
+      return { ok: true, filled: report ?? emptyReport() };
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  return { ok: false, error: "unknown request" };
+}
+
+// ---- test hook (loopback doubles only) ----
+//
+// S15 drives the real handler above without a service worker: MV3 workers
+// are lazy and may never start on their own in a test context, and page
+// scripts cannot reach chrome.tabs. Accepted ONLY on loopback hosts, so
+// production SCORES/IEPF pages ignore these messages entirely. Filling only
+// writes visible form fields with the caller-supplied state — it never
+// submits, and the submit/CAPTCHA guards in fillEngine apply unchanged.
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window) return;
+  const data = event.data as { type?: string; message?: ContentRequest } | null;
+  if (!data || data.type !== "__sarthiTestFill" || !LOOPBACK_HOSTS.has(location.hostname)) return;
+  handleContentMessage(data.message as ContentRequest).then((result) => {
+    window.postMessage({ type: "__sarthiTestFillResult", result }, "*");
+  });
 });
 
 function emptyReport(): FillReport {

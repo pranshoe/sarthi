@@ -47,7 +47,7 @@ export function attachToInput(selector: string, files: Attachment[]): boolean {
 
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
-  input.setAttribute("data-saathi-filled", "true");
+  input.setAttribute("data-sarthi-filled", "true");
   return true;
 }
 

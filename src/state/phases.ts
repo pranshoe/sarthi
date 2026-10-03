@@ -1,19 +1,20 @@
 import type { EscalationStatus, GrievanceState } from "@/shared/types";
-import { parseISODate, daysBetween, todayISO, toDate, toLocalISO } from "./dates";
+import { parseISODate, daysBetween, todayISO } from "./dates";
 import { SCORES_RULES } from "@/data/scoresRules";
 
 /**
  * All numbers come from SCORES_RULES (verified, sourced). Nothing here is a
  * magic literal: if SEBI changes a timeline, one file changes and the
  * escalation logic, emails and deadlines all follow.
+ *
+ * There is deliberately NO pre-filing waiting period: once contact with the
+ * company is confirmed with a date, the complaint may proceed. Do not add one.
  */
-export const WAIT_DAYS = SCORES_RULES.preFilingEntityWaitDays.value;
 export const ATR_DAYS = SCORES_RULES.atrDays.value;
 export const REVIEW_DAYS = SCORES_RULES.firstReviewDays.value;
 export const LIMIT_DAYS = SCORES_RULES.limitationDays.value;
 
 export const TIMELINE = [
-  { stage: "Broker response expected", days: WAIT_DAYS, note: "wait before escalating" },
   { stage: "Entity must file ATR", days: ATR_DAYS, note: "starts only after you file on SCORES" },
   { stage: "First-level review request", days: REVIEW_DAYS, note: "from ATR receipt" },
   { stage: "Second-level review request", days: REVIEW_DAYS, note: "from Designated Body" },
@@ -69,10 +70,12 @@ export function evaluateEscalation(state: GrievanceState): EscalationStatus {
       closesOn: null,
       message:
         `SEBI only accepts a complaint if you first approached the company. ` +
-        `They then get ${WAIT_DAYS} days to respond.`,
+        `Write to them, confirm the date here, and you can proceed.`,
     };
   }
 
+  // Contact confirmed with a date: eligible immediately. There is no
+  // pre-filing waiting period by design (see scoresRules.ts).
   const sent = parseISODate(state.priorContactDate);
   if (!sent) {
     return {
@@ -83,34 +86,13 @@ export function evaluateEscalation(state: GrievanceState): EscalationStatus {
   }
 
   const elapsed = daysBetween(sent, now);
-
-  if (elapsed >= WAIT_DAYS) {
-    return {
-      eligible: true,
-      expired: false,
-      reason: "wait_passed",
-      daysElapsed: elapsed,
-      daysLeft: 0,
-      closesOn: null,
-      message: `${WAIT_DAYS} days have passed since you wrote to them, with no resolution. You can file on SCORES now.`,
-    };
-  }
-
-  const left = WAIT_DAYS - elapsed;
   return {
-    eligible: false,
+    eligible: true,
     expired: false,
-    reason: "waiting",
+    reason: "wait_passed",
     daysElapsed: elapsed,
-    daysLeft: left,
-    closesOn: addDaysISO(sent, WAIT_DAYS),
-    message: `The company still has ${left} more days to respond before you can file on SCORES.`,
+    daysLeft: 0,
+    closesOn: null,
+    message: `You wrote to them ${elapsed} days ago. You can file on SCORES now.`,
   };
-}
-
-function addDaysISO(from: Date | string, days: number): string {
-  const d = toDate(from);
-  if (!d) return typeof from === "string" ? from : toLocalISO(from);
-  d.setDate(d.getDate() + days);
-  return toLocalISO(d);
 }

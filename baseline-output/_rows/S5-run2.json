@@ -1,0 +1,43 @@
+{
+ "id": "S5",
+ "title": "HARD gate: claim then denial ends unconfirmed, email offered, never AUTOFILL",
+ "hard": true,
+ "run": 2,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "confirmed false",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  },
+  {
+   "name": "date cleared",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  },
+  {
+   "name": "phase never AUTOFILL",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  },
+  {
+   "name": "canAutofill false",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  },
+  {
+   "name": "email offered",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  }
+ ],
+ "failures": [],
+ "turns": 2,
+ "llmCalls": 4
+}

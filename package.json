@@ -1,25 +1,31 @@
 {
-  "name": "saathi",
+  "name": "sarthi",
   "private": true,
   "version": "0.1.0",
-  "description": "Saathi - conversational grievance agent for SEBI SCORES and IEPF",
+  "description": "Sarthi - conversational grievance agent for SEBI SCORES and IEPF",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && npm run build:content",
+    "build:content": "esbuild src/content/detector.ts --bundle --format=iife --outfile=dist/content.js --alias:@=./src --target=chrome116 --minify",
     "build:fast": "vite build",
     "preview": "vite preview",
     "proxy": "node --experimental-strip-types proxy/server.ts",
+    "mock-portal": "python -m http.server 8788 --directory mock-scores --bind 127.0.0.1",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:convo": "vitest run tests/conversations && node ./tests/conversations/print-summary.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "pdfjs-dist": "^6.3.289",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tesseract.js": "^7.0.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/chrome": "^0.0.287",
     "@types/node": "^26.6.4",
     "@types/react": "^18.3.12",
@@ -31,8 +37,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
-    "vitest": "^2.1.8",
-    "@playwright/test": "^1.40.0"
+    "vitest": "^2.1.8"
   },
   "allowScripts": {
     "esbuild@0.25.12": true,

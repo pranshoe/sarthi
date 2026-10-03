@@ -40,7 +40,7 @@ const ROMANIZED: Array<{ base: string; tag: string; words: string[] }> = [
   { base: "kn", tag: "kn-Latn", words: ["namaskara", "naanu", "nakku", "illa", "iddu", "yava", "hage", "tanna", "paisa"] },
   { base: "ml", tag: "ml-Latn", words: ["namaskaram", "naanu", "akkre", "illa", "und", "enta", "panam"] },
   { base: "bn", tag: "bn-Latn", words: ["namaskar", "ami", "amar", "taka", "nai", "ghono"] },
-  { base: "mr", tag: "mr-Latn", words: ["namaskar", "maza", "ahe", "nahi", "kar", "please"] },
+  { base: "mr", tag: "mr-Latn", words: ["namaskar", "maza", "ahe", "nahi", "kar"] },
   { base: "gu", tag: "gu-Latn", words: ["kem", "tamaro", "che", "nathi", "makar"] },
   { base: "pa", tag: "pa-Latn", words: ["sat", "sri", "aap", "da", "hai", "koi"] },
 ];
@@ -69,12 +69,19 @@ export function detectLanguage(input: string): DetectedLang {
   }
 
   // 2. Greeting-specific hint, useful for very short or ambiguous input.
+  // A Latin-script greeting ("Namaste!") is romanized, not native: the tag
+  // must say -Latn or downstream script checks misread English replies.
   for (const g of GREETINGS) {
-    if (g.re.test(text)) {
+    const m = g.re.exec(text);
+    if (m) {
       const tag = g.lang;
+      const base = tag.split("-")[0]!;
+      if (/^[\x00-\x7F]*$/.test(m[0])) {
+        return { tag: `${base}-Latn`, base, script: "Latn", latin: true, confidence: 0.9 };
+      }
       return {
         tag,
-        base: tag.split("-")[0]!,
+        base,
         script: scriptForTag(tag),
         latin: false,
         confidence: 0.9,
@@ -117,5 +124,13 @@ export function isSmallTalk(text: string): boolean {
   const greeting =
     /^(hi|hello|hey|yo|hii+|namaste|namaskar|namaskaram|vanakkam|namaskara|sat sri|good (morning|afternoon|evening)|ok|okay|thanks|thank you|haan|ha|yes|no)\b[.! ]*$/i;
   if (greeting.test(t)) return true;
+  // Native-script greetings (নমস্কার, કેમ, ...): same rule, any script.
+  // The table patterns are prefix-anchored, so require the remainder to be
+  // punctuation only — "vanakkam, I have a problem" is intake, not small talk.
+  const raw = text.trim();
+  for (const g of GREETINGS) {
+    const m = g.re.exec(raw);
+    if (m && /^[\s.!…]*$/.test(raw.slice(m[0].length))) return true;
+  }
   return t.length <= 3;
 }

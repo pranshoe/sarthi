@@ -23,20 +23,21 @@ export const emptyState = (): GrievanceState => ({
 });
 
 /**
- * Which fields block an autofill. clientIdFolioNoDpid is deliberately absent:
- * many retail investors genuinely do not know it, and we must be able to move
- * on without it rather than trapping them in a loop (acceptance test 9).
+ * What "ready to review" means, computed in code — never declared by the LLM.
+ * entityName, both summaries, date, amount, relief, plus an explicit position
+ * on prior contact (proof set to emailed/none/rejected counts as explicit;
+ * untouched null does not). clientId and priorContactProof detail are optional
+ * and never block. entityType/complaintCategory are inferred with confidence
+ * and asked openly only when uncertain — they never block review.
  */
-export const REQUIRED: FieldKey[] = [
-  "issueSummaryEnglish",
+export const REQUIRED_FOR_REVIEW: FieldKey[] = [
   "entityName",
-  "entityType",
-  "complaintCategory",
+  "issueSummaryEnglish",
   "incidentDate",
+  "amountInvolved",
   "reliefSought",
+  "priorContact",
 ];
-
-export const OPTIONAL: FieldKey[] = ["clientIdFolioNoDpid", "amountInvolved"];
 
 export function has(state: GrievanceState, key: FieldKey): boolean {
   switch (key) {
@@ -56,20 +57,20 @@ export function has(state: GrievanceState, key: FieldKey): boolean {
  */
 export function missingFields(state: GrievanceState): FieldKey[] {
   const skipped = new Set(state.skippedFields);
-  return REQUIRED.filter((k) => !skipped.has(k) && !has(state, k));
+  return REQUIRED_FOR_REVIEW.filter((k) => !skipped.has(k) && !has(state, k));
 }
 
 /**
  * What the next question should most plausibly be about: first missing
- * required field, then unfilled optional fields. Used to attribute answers
- * (and non-answers) to the field being asked about.
+ * required-for-review field, then the client ID if still unknown. Used to
+ * attribute answers (and non-answers) to the field being asked about.
  */
 export function nextFocus(state: GrievanceState): FieldKey | null {
   const missing = missingFields(state);
   if (missing.length > 0) return missing[0]!;
   const skipped = new Set(state.skippedFields);
-  for (const f of OPTIONAL) {
-    if (!skipped.has(f) && !has(state, f)) return f;
+  if (!skipped.has("clientIdFolioNoDpid") && !has(state, "clientIdFolioNoDpid")) {
+    return "clientIdFolioNoDpid";
   }
   return null;
 }

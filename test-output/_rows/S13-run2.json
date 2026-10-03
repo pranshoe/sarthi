@@ -1,0 +1,25 @@
+{
+ "id": "S13",
+ "title": "Mid-flow SCORES question answered, then resumes without repeats",
+ "hard": false,
+ "run": 2,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "answers the question",
+   "pass": true,
+   "reason": "",
+   "turn": 3
+  },
+  {
+   "name": "asks nothing already known",
+   "pass": true,
+   "reason": "",
+   "turn": 3
+  }
+ ],
+ "failures": [],
+ "turns": 3,
+ "llmCalls": 3
+}

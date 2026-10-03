@@ -1,0 +1,67 @@
+{
+ "id": "S6",
+ "title": "HARD review: card same turn, Yes advances with zero LLM calls",
+ "hard": true,
+ "run": 3,
+ "mode": "live",
+ "passed": false,
+ "checks": [
+  {
+   "name": "review card shown",
+   "pass": false,
+   "reason": "no turn carried a review card",
+   "turn": 5
+  },
+  {
+   "name": "review data complete",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "review lists the entity",
+   "pass": false,
+   "reason": "[null,null,\"2026-03-03\",\"INR 40000\",\"Full refund of 40000 rupees sale proceeds\",\"No — will email first\"]",
+   "turn": 5
+  },
+  {
+   "name": "card markup shows entity",
+   "pass": false,
+   "reason": "<div class=\"mt-2 rounded-xl border border-brand-200 bg-brand-50/60 p-3\" data-testid=\"review-card\"><p class=\"mb-2 text-[12px] font-bold uppercase tracking-wide text-brand-700\">Please review</p><dl clas",
+   "turn": 5
+  },
+  {
+   "name": "card markup has both buttons",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "no new LLM call on confirm",
+   "pass": false,
+   "reason": "1 extra call(s)",
+   "turn": 5
+  },
+  {
+   "name": "summary confirmed",
+   "pass": false,
+   "reason": "not confirmed",
+   "turn": 5
+  },
+  {
+   "name": "phase advanced past CONFIRM",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  }
+ ],
+ "failures": [
+  "T5 [review card shown] no turn carried a review card",
+  "T5 [review lists the entity] [null,null,\"2026-03-03\",\"INR 40000\",\"Full refund of 40000 rupees sale proceeds\",\"No — will email first\"]",
+  "T5 [card markup shows entity] <div class=\"mt-2 rounded-xl border border-brand-200 bg-brand-50/60 p-3\" data-testid=\"review-card\"><p class=\"mb-2 text-[12px] font-bold uppercase tracking-wide text-brand-700\">Please review</p><dl clas",
+  "T5 [no new LLM call on confirm] 1 extra call(s)",
+  "T5 [summary confirmed] not confirmed"
+ ],
+ "turns": 5,
+ "llmCalls": 9
+}

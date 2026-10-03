@@ -1,0 +1,31 @@
+{
+ "id": "S10",
+ "title": "State integrity: untouched date stays, explicit correction applies cleanly",
+ "hard": false,
+ "run": 1,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "neutral turn leaves contact date alone",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  },
+  {
+   "name": "amount corrected",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  },
+  {
+   "name": "only the amount changed",
+   "pass": true,
+   "reason": "",
+   "turn": 2
+  }
+ ],
+ "failures": [],
+ "turns": 2,
+ "llmCalls": 2
+}

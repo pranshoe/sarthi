@@ -1,0 +1,37 @@
+{
+ "id": "S1",
+ "title": "Greeting gets greeting + invite, no field question",
+ "hard": false,
+ "run": 3,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "mentions saathi",
+   "pass": true,
+   "reason": "",
+   "turn": 1
+  },
+  {
+   "name": "open invite, no interrogation",
+   "pass": true,
+   "reason": "",
+   "turn": 1
+  },
+  {
+   "name": "no field question",
+   "pass": true,
+   "reason": "",
+   "turn": 1
+  },
+  {
+   "name": "nothing captured yet",
+   "pass": true,
+   "reason": "",
+   "turn": 1
+  }
+ ],
+ "failures": [],
+ "turns": 1,
+ "llmCalls": 1
+}

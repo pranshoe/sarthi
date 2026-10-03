@@ -25,7 +25,7 @@ export async function repairOnce(
       },
     ]);
   } catch (e) {
-    console.warn("[saathi] repair pass failed", e);
+    console.warn("[sarthi] repair pass failed", e);
     return null;
   }
 }

@@ -1,0 +1,25 @@
+{
+ "id": "S2",
+ "title": "Tamil greeting answered in Tamil",
+ "hard": false,
+ "run": 1,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "reply in Tamil",
+   "pass": true,
+   "reason": "",
+   "turn": 1
+  },
+  {
+   "name": "no field question",
+   "pass": true,
+   "reason": "",
+   "turn": 1
+  }
+ ],
+ "failures": [],
+ "turns": 1,
+ "llmCalls": 1
+}

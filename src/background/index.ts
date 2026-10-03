@@ -29,7 +29,7 @@ chrome.alarms?.onAlarm.addListener((alarm) => {
     chrome.notifications?.create({
       type: "basic",
       iconUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", // 1x1 transparent fallback
-      title: "Saathi: SEBI Update",
+      title: "Sarthi: SEBI Update",
       message: `Your grievance ticket #${ticket} has been updated. The entity has submitted a reply.`,
       priority: 2,
     });
@@ -91,7 +91,7 @@ async function handle(msg: WorkerRequest, sender: chrome.runtime.MessageSender):
       fd.append("mode", "transcribe");
       fd.append("language_code", langHint && langHint !== "auto" ? langHint : "unknown");
 
-      const res = await callProxy("/stt", { method: "POST", body: fd });
+      const res = await callProxy("/speech/stt", { method: "POST", body: fd });
       const body = (await res.json()) as { text?: string; detectedLang?: string; error?: string };
       if (!res.ok) {
         return { ok: false, error: body.error ?? `stt ${res.status}`, detail: JSON.stringify(body) };
@@ -100,7 +100,7 @@ async function handle(msg: WorkerRequest, sender: chrome.runtime.MessageSender):
     }
 
     case "tts/speak": {
-      const res = await callProxy("/tts", {
+      const res = await callProxy("/speech/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(msg.payload),
@@ -132,7 +132,19 @@ async function handle(msg: WorkerRequest, sender: chrome.runtime.MessageSender):
   }
 }
 
+// Must match PROXY_PROTOCOL in proxy/server.ts. Bump both together.
+const EXPECTED_PROXY_PROTOCOL = "sarthi-proxy/2";
+
 // Surface proxy status so the panel can warn before the demo if it is down.
 chrome.runtime.onInstalled.addListener(() => {
-  void proxyHealth().then((h) => console.info("[saathi] proxy:", h));
+  void proxyHealth().then((h) => {
+    console.info("[sarthi] proxy:", h);
+    if (h && h.protocol && h.protocol !== EXPECTED_PROXY_PROTOCOL) {
+      console.error(
+        `[sarthi] PROXY MISMATCH: running proxy speaks ${h.protocol}, ` +
+          `extension expects ${EXPECTED_PROXY_PROTOCOL}. ` +
+          `Kill the old proxy and restart it with \`npm run proxy\` from the current sources, then reload the extension.`,
+      );
+    }
+  });
 });

@@ -116,7 +116,7 @@
 
         <div class="captcha" id="captcha">
           <strong>CAPTCHA:</strong> 7 3 K 9 &nbsp;
-          <em>(Saathi never touches this. You solve it yourself.)</em>
+          <em>(Sarthi never touches this. You solve it yourself.)</em>
         </div>
 
         <button type="submit" id="submitBtn">Submit Complaint</button>
@@ -131,8 +131,8 @@
         const el = document.getElementById(id);
         el.addEventListener("input", () => {
           log.textContent = `${id} = ${el.value.slice(0, 60)}`;
-          window.__saathiReplicaState = window.__saathiReplicaState || {};
-          window.__saathiReplicaState[id] = el.value;
+          window.__sarthiReplicaState = window.__sarthiReplicaState || {};
+          window.__sarthiReplicaState[id] = el.value;
         });
       }
       document.getElementById("submitBtn").addEventListener("click", () => {

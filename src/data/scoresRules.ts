@@ -36,13 +36,6 @@ export const SCORES_RULES = {
     sourceUrl: INVESTOR_URL,
     lastVerified: "2026-10-02",
   },
-  /** The company gets this long to resolve your email before you may escalate. */
-  preFilingEntityWaitDays: {
-    value: 30,
-    source: `${CIRCULAR} (approach the entity first) and SCORES investor FAQ; consistent with the regulator-prescribed 30-day turnaround stated in broker grievance policies`,
-    sourceUrl: CIRCULAR_URL,
-    lastVerified: "2026-10-02",
-  } satisfies VerifiedRule<number>,
   /** Once filed on SCORES, the entity must answer within this long. */
   atrDays: {
     value: 21,
@@ -85,13 +78,14 @@ export function formatRulesForPrompt(): string {
   const r = SCORES_RULES;
   return [
     "SCORES_RULES (verified; last checked 2026-10-02):",
-    `- Before SCORES, the company gets ${r.preFilingEntityWaitDays.value} days to resolve your email. Only escalate after that, or immediately if they reject you outright.`,
     `- After you file, the company must answer (Action Taken Report) within ${r.atrDays.value} days.`,
     `- Unhappy with the answer? First review within ${r.firstReviewDays.value} days of their reply, second review within ${r.secondReviewDays.value} days after that.`,
     `- File within ${r.limitationDays.value} days (one year) of when the problem happened.`,
     `- Feedback on a closed complaint: within ${r.feedbackDays.value} days.`,
     `- SEBI helpline: ${r.helpline.value.join(", ")}. Portal: ${r.portalUrl.value}.`,
     "State process timelines or legal rules ONLY from these SCORES_RULES. " +
-      "If a rule is not listed here, say you are not sure and point to scores.sebi.gov.in or SEBI's helpline.",
+      "If a rule is not listed here, say you are not sure and point to scores.sebi.gov.in or SEBI's helpline. " +
+      "This ban covers every language and script, including Hindi and Hinglish: " +
+      "never cite 'SEBI rules', 'niyam' or 'kanoon' as authority for anything not listed above.",
   ].join("\n");
 }

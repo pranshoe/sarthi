@@ -19,5 +19,10 @@
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] }
   },
-  "include": ["src", "proxy", "tests", "vite.config.ts"]
+  "include": ["src", "proxy", "tests", "vite.config.ts"],
+  "exclude": [
+    "tests/e2e",
+    "node_modules",
+    "dist"
+  ]
 }

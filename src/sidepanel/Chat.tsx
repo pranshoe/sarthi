@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatTurn, EmailDraft } from "@/shared/types";
+import type { ChatTurn, EmailDraft, GrievanceState } from "@/shared/types";
 import { EmailDraftCard } from "./EmailDraftCard";
+import { ReviewCard } from "./ReviewCard";
 
 /**
  * Chat transcript. No language picker here on purpose: the agent mirrors the
@@ -15,6 +16,9 @@ export function Chat({
   onOpenGmail,
   onEmailSent,
   gmailFailed,
+  reviewState,
+  onReviewConfirm,
+  onReviewEdit,
 }: {
   history: ChatTurn[];
   busy: boolean;
@@ -24,6 +28,9 @@ export function Chat({
   onOpenGmail: (d: EmailDraft) => void;
   onEmailSent: () => void;
   gmailFailed: boolean;
+  reviewState: GrievanceState;
+  onReviewConfirm: () => void;
+  onReviewEdit: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -68,6 +75,14 @@ export function Chat({
                   gmailFailed={gmailFailed}
                   onOpenGmail={onOpenGmail}
                   onSent={onEmailSent}
+                />
+              )}
+              {t.review && (
+                <ReviewCard
+                  state={reviewState}
+                  missing={t.review.missingAtShow}
+                  onConfirm={onReviewConfirm}
+                  onEdit={onReviewEdit}
                 />
               )}
             </div>

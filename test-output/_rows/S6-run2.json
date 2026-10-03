@@ -1,0 +1,73 @@
+{
+ "id": "S6",
+ "title": "HARD review: card same turn, confirm is free, one follow-up continues",
+ "hard": true,
+ "run": 2,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "review card shown",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "review rendered same turn as reviewing words",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "review data complete",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "review lists the entity",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "card markup shows entity",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "card markup has both buttons",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "summary confirmed",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "proactive follow-up turn happened",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "phase advanced past CONFIRM",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "follow-up drives the contact step",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  }
+ ],
+ "failures": [],
+ "turns": 5,
+ "llmCalls": 7
+}

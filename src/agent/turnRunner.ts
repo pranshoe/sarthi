@@ -1,7 +1,17 @@
 import type { ChatTurn, GrievanceState, LLMTurnResult } from "@/shared/types";
 import type { LLMProvider } from "@/providers/types";
 import { SYSTEM_PROMPT, buildTurnInstructions } from "./systemPrompt";
-import { neutralise, textSimilarity, validateTurn, violatesGuardrails } from "./guardrails";
+import {
+  askedAboutField,
+  declaresReadiness,
+  neutralise,
+  promisedAction,
+  sanitiseRuleLanguage,
+  statesUnverifiedRule,
+  textSimilarity,
+  validateTurn,
+  violatesGuardrails,
+} from "./guardrails";
 import { repairOnce } from "@/providers/llm/repair";
 import { detectLanguage } from "./detect";
 import { todayISO } from "@/state/dates";
@@ -62,6 +72,8 @@ export interface TurnOutcome {
   repairUsed: boolean;
   /** Set when the reply repeated a recent question and was regenerated. */
   repeatDetected: boolean;
+  /** Raw model output for this turn (dev overlay + harness transcripts). */
+  rawResponse: string;
 }
 
 /** Two replies asking the same thing score above this. No embeddings offline. */
@@ -125,7 +137,7 @@ export async function runTurn(
       nextAction: "none",
       confidence: {},
     };
-    console.warn("[saathi] model output unusable after repair; using fallback");
+    console.warn("[sarthi] model output unusable after repair; using fallback");
   }
 
   // Code decides what is allowed, regardless of what the model asked for.
@@ -142,6 +154,30 @@ export async function runTurn(
     turn = { ...turn, nextAction: "none" };
   }
 
+  // Promise/action agreement: a reply that presents an artifact must carry
+  // its action or the UI never renders it. Set it in code when the phase
+  // allows; regenerate once when it doesn't.
+  {
+    const promise = promisedAction(turn.reply);
+    if (turn.nextAction === "none" && promise) {
+      if (allowed.includes(promise)) {
+        turn = { ...turn, nextAction: promise };
+      } else {
+        const fixed = await repairOnce(
+          llm,
+          JSON.stringify(turn),
+          `Your reply presents ${promise} but that action is not available now (allowed: ${allowed.join(", ") || "none"}). Either set an allowed nextAction or rephrase without presenting anything. Return the same JSON format.`,
+          messages,
+        );
+        const retried = fixed ? validateTurn(fixed) : null;
+        if (retried) {
+          repairUsed = true;
+          turn = retried;
+        }
+      }
+    }
+  }
+
   const guardrailTripped = violatesGuardrails(turn.reply);
   if (guardrailTripped) {
     turn = {
@@ -150,10 +186,88 @@ export async function runTurn(
     };
   }
 
+  // Readiness honesty: the model may not declare intake complete while the
+  // computed missing list is non-empty. Regenerate once, then accept.
+  if (derived.missing.length > 0 && declaresReadiness(turn.reply)) {
+    const fixed = await repairOnce(
+      llm,
+      JSON.stringify(turn),
+      `You said you have everything, but ${derived.missing.join(", ")} is still missing. Rephrase without claiming readiness, and ask about one missing item. Return the same JSON format.`,
+      messages,
+    );
+    const retried = fixed ? validateTurn(fixed) : null;
+    if (retried) {
+      repairUsed = true;
+      turn = retried;
+    }
+  }
+
+  // Rules honesty: timelines come only from SCORES_RULES. Regenerate once;
+  // a deterministic rewrite guarantees the reply even if the retry also
+  // invents a rule (seen live: "SEBI rules require…" survived repair).
+  if (statesUnverifiedRule(turn.reply)) {
+    const fixed = await repairOnce(
+      llm,
+      JSON.stringify(turn),
+      `Your reply states a timeline or rule that is not in SCORES_RULES. Rephrase using only the verified rules, or say you are not sure and point to scores.sebi.gov.in. Return the same JSON format.`,
+      messages,
+    );
+    const retried = fixed ? validateTurn(fixed) : null;
+    if (retried) {
+      repairUsed = true;
+      turn = retried;
+    }
+  }
+  if (statesUnverifiedRule(turn.reply)) {
+    turn = { ...turn, reply: sanitiseRuleLanguage(turn.reply) };
+  }
+
+  // Never ask what is already known: detect the asked field and, when it is
+  // captured, regenerate once naming the known value.
+  {
+    const known = knownView(ctx.state);
+    const asked = askedAboutField(turn.reply, known);
+    if (asked) {
+      const fixed = await repairOnce(
+        llm,
+        JSON.stringify(turn),
+        `${asked}=${String(known[asked] ?? known.priorContact ?? "")} is already known. Ask about something else or move forward. Return the same JSON format.`,
+        messages,
+      );
+      const retried = fixed ? validateTurn(fixed) : null;
+      if (retried) {
+        repairUsed = true;
+        turn = retried;
+      }
+    }
+  }
+
   // Keep the detected language honest even if the model guessed oddly.
   const local = detectLanguage(latestUserMessage);
   if (local.confidence >= 0.9 && local.tag !== turn.detectedLanguage) {
     turn = { ...turn, detectedLanguage: local.tag };
+  }
+
+  // Script mirroring (spec A.5): a native-script message answered in Latin
+  // is regenerated once in the user's script. The reverse (romanized input
+  // answered in native script) is left alone: it reads fine and the mock
+  // contract answers vanakkam that way. Rupee sign and emoji are not
+  // script markers - only Indic/Urdu blocks count.
+  {
+    const native = /[\u0900-\u0D7F\u0600-\u06FF]/;
+    if (native.test(latestUserMessage) && !native.test(turn.reply)) {
+      const fixed = await repairOnce(
+        llm,
+        JSON.stringify(turn),
+        `Your reply is in the wrong script: the user wrote in a native Indic script but your reply is romanized. Reply again in the user language AND script, keeping the same meaning and question. Return the same JSON format.`,
+        messages,
+      );
+      const retried = fixed ? validateTurn(fixed) : null;
+      if (retried) {
+        repairUsed = true;
+        turn = retried;
+      }
+    }
   }
 
   // No repeats: if this reply asks the same thing as one of the last few
@@ -191,7 +305,7 @@ export async function runTurn(
     }
   }
 
-  return { turn, suppressedAction, guardrailTripped, repairUsed, repeatDetected };
+  return { turn, suppressedAction, guardrailTripped, repairUsed, repeatDetected, rawResponse: raw };
 }
 
 /**

@@ -11,12 +11,6 @@ export interface LLMProvider {
   chat(messages: ChatMessage[], opts?: { jsonSchema?: unknown }): Promise<string>;
 }
 
-export interface VisionProvider {
-  readonly id: string;
-  /** Extracts structured data from images based on the prompt. Returns JSON string. */
-  analyze(imagesBase64: string[], prompt: string): Promise<string>;
-}
-
 export interface STTResult {
   text: string;
   detectedLang: string;
@@ -59,7 +53,7 @@ export function logCost(label: string, detail: Record<string, unknown>): void {
     (ledger.ttsChars / 10_000) * 30;
 
   console.info(
-    `%c[saathi] ${label}`,
+    `%c[sarthi] ${label}`,
     "color:#1a56db;font-weight:700",
     {
       ...detail,

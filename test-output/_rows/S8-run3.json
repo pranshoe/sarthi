@@ -1,0 +1,19 @@
+{
+ "id": "S8",
+ "title": "HARD no invented rules across all replies",
+ "hard": true,
+ "run": 3,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "no invented rules anywhere",
+   "pass": true,
+   "reason": "",
+   "turn": 0
+  }
+ ],
+ "failures": [],
+ "turns": 0,
+ "llmCalls": 0
+}

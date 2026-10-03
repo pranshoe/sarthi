@@ -3,6 +3,12 @@ import type { Attachment, DerivedState, FillReport, GrievanceState } from "@/sha
 import { SCORES_RULES } from "@/data/scoresRules";
 import { formatHuman } from "@/state/dates";
 import { MAX_ATTACHMENT_BYTES, fileToAttachment } from "@/portal/fileAttach";
+import {
+  extractProofFromImageBytes,
+  extractProofFromPdfBytes,
+  flagProofMismatch,
+  type ProofFields,
+} from "@/portal/ocrProof";
 
 /**
  * Review checklist. Everything the agent did, plus what it could not do and
@@ -24,6 +30,8 @@ export function ReviewChecklist({
   busy: boolean;
 }) {
   const [err, setErr] = useState<string | null>(null);
+  const [scanning, setScanning] = useState<string | null>(null);
+  const [scans, setScans] = useState<Record<string, ProofFields>>({});
 
   async function onPick(files: FileList | null) {
     if (!files?.length) return;
@@ -40,6 +48,31 @@ export function ReviewChecklist({
   const uncertain = Object.entries(derived.confidence)
     .filter(([, v]) => typeof v === "number" && v < 0.7)
     .map(([k]) => k);
+
+  function dataUrlToBytes(dataUrl: string): Uint8Array {
+    const b64 = dataUrl.includes(",") ? dataUrl.split(",").pop()! : dataUrl;
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  async function onScan(a: Attachment) {
+    setScanning(a.name);
+    setErr(null);
+    try {
+      const bytes = dataUrlToBytes(a.dataUrl);
+      const isPdf = a.type.includes("pdf") || a.name.toLowerCase().endsWith(".pdf");
+      const proof = isPdf
+        ? await extractProofFromPdfBytes(bytes)
+        : await extractProofFromImageBytes(bytes);
+      setScans((s) => ({ ...s, [a.name]: proof }));
+    } catch (e) {
+      setErr(e instanceof Error ? `Scan failed: ${e.message}` : "Scan failed.");
+    } finally {
+      setScanning(null);
+    }
+  }
 
   return (
     <div className="space-y-3 px-3 pb-4" data-testid="review">
@@ -80,16 +113,11 @@ export function ReviewChecklist({
             ? "Outside the SCORES time limit"
             : derived.escalation.eligible
               ? "You can file on SCORES now"
-              : "Waiting period"}
+              : "Next step"}
         </p>
         <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
           {derived.escalation.message}
         </p>
-        {derived.escalation.closesOn && (
-          <p className="mt-1 text-[12px] text-slate-500">
-            Can file from {formatHuman(derived.escalation.closesOn)}
-          </p>
-        )}
       </div>
 
       {derived.blockers.length > 0 && (
@@ -118,10 +146,35 @@ export function ReviewChecklist({
                 <span>📄</span>
                 <span className="flex-1 truncate">{a.name}</span>
                 <span className="text-slate-400">{(a.size / 1024).toFixed(0)}KB</span>
+                <button
+                  onClick={() => void onScan(a)}
+                  disabled={scanning === a.name}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-slate-600 disabled:opacity-50"
+                  data-testid={`scan-${a.name}`}
+                >
+                  {scanning === a.name ? "Scanning…" : "Scan"}
+                </button>
               </li>
             ))}
           </ul>
         )}
+        {Object.entries(scans).map(([name, proof]) => {
+          const flag = flagProofMismatch(state, proof);
+          return (
+            <div key={name} className="mb-2 rounded-lg bg-slate-50 p-2 text-[12px] text-slate-600">
+              <p className="font-semibold text-slate-700">Scanned {name}:</p>
+              <p>
+                ticket {proof.ticketNumber ?? "—"} · date {proof.date ?? "—"} · client{" "}
+                {proof.clientId ?? "—"}
+              </p>
+              {flag.message && (
+                <p className="mt-1 font-medium text-amber-800" data-testid={`mismatch-${name}`}>
+                  ⚠ {flag.message}
+                </p>
+              )}
+            </div>
+          );
+        })}
         <input
           type="file"
           accept="application/pdf,image/*"
@@ -191,7 +244,7 @@ export function ReviewChecklist({
               type: "alarm/set", 
               payload: { ticketNumber: ticket, delayMinutes: 1 } 
             });
-            alert("Follow-up tracking enabled! Saathi will notify you in 1 minute when the entity replies.");
+            alert("Follow-up tracking enabled! Sarthi will notify you in 1 minute when the entity replies.");
           }}
           className="mt-2 w-full rounded-xl bg-slate-800 py-3 font-bold text-white hover:bg-slate-700"
         >

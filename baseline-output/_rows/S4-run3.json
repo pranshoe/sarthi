@@ -1,0 +1,145 @@
+{
+ "id": "S4",
+ "title": "Regression: August dates, no year/category/summary interrogation",
+ "hard": false,
+ "run": 3,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "T1 never asks for the year",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T1 never asks user to write English",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T1 never asks for the category",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T2 never asks for the year",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T2 never asks user to write English",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T2 never asks for the category",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T3 never asks for the year",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T3 never asks user to write English",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T3 never asks for the category",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T4 never asks for the year",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T4 never asks user to write English",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T4 never asks for the category",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T5 never asks for the year",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T5 never asks user to write English",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T5 never asks for the category",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T6 never asks for the year",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T6 never asks user to write English",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "T6 never asks for the category",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "incident in Aug 2026",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "category captured",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "asked about contact or amount somewhere",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  },
+  {
+   "name": "never reached AUTOFILL",
+   "pass": true,
+   "reason": "",
+   "turn": 6
+  }
+ ],
+ "failures": [],
+ "turns": 6,
+ "llmCalls": 6
+}

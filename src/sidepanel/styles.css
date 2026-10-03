@@ -36,12 +36,12 @@ body {
 }
 
 /* Highlight the fields the agent filled, so review is fast. */
-[data-saathi-filled="true"] {
+[data-sarthi-filled="true"] {
   box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.35) !important;
   border-radius: 6px;
 }
 
 /* Field the agent could not resolve confidently. */
-.saathi-launcher {
+.sarthi-launcher {
   font-family: system-ui, sans-serif;
 }

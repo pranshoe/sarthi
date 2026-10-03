@@ -3,8 +3,6 @@ import { Conversation, type AgentController } from "./conversation";
 import { Chat } from "./Chat";
 import { UnderstoodCard } from "./UnderstoodCard";
 import { ReviewChecklist } from "./ReviewChecklist";
-import { IepfValidator } from "./IepfValidator";
-import { AffidavitCopilot } from "./AffidavitCopilot";
 import { useMic } from "./MicButton";
 import { config } from "@/shared/config";
 import type { Attachment, EmailDraft, FillReport } from "@/shared/types";
@@ -12,15 +10,27 @@ import type { Attachment, EmailDraft, FillReport } from "@/shared/types";
 export function App() {
   const conv = useMemo(() => new Conversation(), []);
   const [snap, setSnap] = useState<AgentController>(conv.snapshot);
-  const [tab, setTab] = useState<"chat" | "review" | "iepf" | "affidavit">("chat");
+  const [tab, setTab] = useState<"chat" | "review">("chat");
   const [report, setReport] = useState<FillReport | null>(null);
   const [consent, setConsent] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [spoken, setSpoken] = useState(config.spokenReplies);
   const started = useRef(false);
+  // History length the chat-driven autofill already fired for. Guards the
+  // edge trigger below against re-firing on every re-render.
+  const filledForTurn = useRef(-1);
 
   useEffect(() => {
-    const unsub = conv.subscribe(setSnap);
+    const unsub = conv.subscribe((snap) => {
+      setSnap(snap);
+      // Chat-driven autofill: when a turn yields start_autofill (only after
+      // the user confirmed the review — enforced in code), fill the portal
+      // for real instead of just talking about it.
+      if (conv.lastAction === "start_autofill" && filledForTurn.current !== snap.history.length) {
+        filledForTurn.current = snap.history.length;
+        void fill();
+      }
+    });
     if (!started.current) {
       started.current = true;
       void conv.start();
@@ -98,7 +108,7 @@ export function App() {
           <div className="flex items-center gap-2">
             <span className="text-xl">🧭</span>
             <div>
-              <h1 className="text-[15px] font-bold leading-tight">Saathi</h1>
+              <h1 className="text-[15px] font-bold leading-tight">Sarthi</h1>
               <p className="text-[11px] opacity-90">Resilience Hub</p>
             </div>
           </div>
@@ -125,18 +135,6 @@ export function App() {
             className={`border-b-2 pb-2 ${tab === "review" ? "border-white" : "border-transparent opacity-70"}`}
           >
             Review
-          </button>
-          <button
-            onClick={() => setTab("iepf")}
-            className={`border-b-2 pb-2 ${tab === "iepf" ? "border-white" : "border-transparent opacity-70"}`}
-          >
-            IEPF OCR
-          </button>
-          <button
-            onClick={() => setTab("affidavit")}
-            className={`border-b-2 pb-2 ${tab === "affidavit" ? "border-white" : "border-transparent opacity-70"}`}
-          >
-            Affidavit
           </button>
         </div>
 
@@ -172,7 +170,7 @@ export function App() {
 
       {!consent && (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-          Saathi sends what you type or say to an AI model so it can help. Nothing is
+          Sarthi sends what you type or say to an AI model so it can help. Nothing is
           stored on a server.{" "}
           <button onClick={() => setConsent(true)} className="font-bold underline">
             I agree
@@ -198,14 +196,41 @@ export function App() {
             onOpenGmail={(d) => void openGmail(d)}
             onEmailSent={() => conv.confirmEmailSent()}
             gmailFailed={snap.gmailFailed}
+            reviewState={snap.state}
+            onReviewConfirm={() => void conv.confirmSummary()}
+            onReviewEdit={() => conv.declineSummary()}
           />
+          {import.meta.env.DEV && (
+            <details className="border-t border-slate-200 bg-slate-900 px-3 py-2 text-[11px] text-green-300">
+              <summary className="cursor-pointer font-mono text-slate-300">
+                debug · phase {snap.derived.phase} · missing [{snap.derived.missing.join(", ")}] ·
+                action {snap.history.filter((t) => t.role === "agent").length > 0 ? conv.lastAction : "none"}
+              </summary>
+              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono">
+{JSON.stringify(
+  {
+    phase: snap.derived.phase,
+    missing: snap.derived.missing,
+    askCounts: conv.askCounts,
+    lastAction: conv.lastAction,
+    lastSuppressed: conv.lastSuppressed,
+    emailFlow: conv.emailFlow,
+    pendingContradictions: conv.pendingContradictions.length,
+    rawLLM: conv.lastRaw,
+  },
+  null,
+  1,
+)}
+              </pre>
+            </details>
+          )}
           {mic.note && (
             <div className="bg-slate-100 px-3 py-1.5 text-center text-[11.5px] text-slate-600">
               {mic.note}
             </div>
           )}
         </>
-      ) : tab === "review" ? (
+      ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ReviewChecklist
             derived={snap.derived}
@@ -215,14 +240,6 @@ export function App() {
             onFill={() => void fill()}
             busy={snap.busy}
           />
-        </div>
-      ) : tab === "iepf" ? (
-        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
-          <IepfValidator />
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
-          <AffidavitCopilot />
         </div>
       )}
     </div>

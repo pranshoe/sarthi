@@ -249,6 +249,13 @@ function safeUsage(body: string): Record<string, number> {
 
 // ---- server ----
 
+/**
+ * Bump whenever a route path or body contract changes. The extension checks
+ * this on startup and shouts when the running proxy predates the bundle
+ * (stale-proxy 404s otherwise surface as cryptic per-model failures).
+ */
+export const PROXY_PROTOCOL = "sarthi-proxy/2";
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
 
@@ -260,6 +267,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/health") {
     return json(res, 200, {
       ok: true,
+      protocol: PROXY_PROTOCOL,
       sarvam: Boolean(SARVAM_KEY),
       gemini: Boolean(GEMINI_KEY),
       spentINR: Number(estimateSpendINR().toFixed(3)),
@@ -289,7 +297,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`\n  saathi proxy  ->  http://127.0.0.1:${PORT}`);
+  console.log(`\n  sarthi proxy  ->  http://127.0.0.1:${PORT}`);
   console.log(`  sarvam key : ${SARVAM_KEY ? "loaded" : "MISSING (proxy/.env)"}`);
   console.log(`  gemini key : ${GEMINI_KEY ? "loaded" : "MISSING (proxy/.env)"}`);
   console.log(`  spend cap  : INR ${SPEND_CAP_INR}`);

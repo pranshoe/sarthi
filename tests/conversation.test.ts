@@ -4,14 +4,22 @@ import { MockLLMProvider } from "@/providers/llm/mockLlm";
 import { MockSTTProvider } from "@/providers/stt/sarvamStt";
 import { emptyState } from "@/state/grievanceState";
 import { detectLanguage, isSmallTalk } from "@/agent/detect";
-import { normaliseDate, textSimilarity, violatesGuardrails } from "@/agent/guardrails";
+import {
+  normaliseDate,
+  textSimilarity,
+  violatesGuardrails,
+  statesUnverifiedRule,
+  sanitiseRuleLanguage,
+  promisedAction,
+} from "@/agent/guardrails";
+import { isAffirmation, isAgreementToDraft } from "@/agent/contactPhrases";
 import { SYSTEM_PROMPT, buildTurnInstructions } from "@/agent/systemPrompt";
 import { buildEmailDraft, gmailComposeUrl } from "@/agent/emailDraft";
 import { SCORES_RULES } from "@/data/scoresRules";
 import { findBrokerContact } from "@/data/brokers";
 import { runTurn } from "@/agent/turnRunner";
 import { computeDeadline, mergeState, partitionUpdates, resolveContradiction } from "@/state/stateReducer";
-import { LIMIT_DAYS, WAIT_DAYS } from "@/state/phases";
+import { LIMIT_DAYS } from "@/state/phases";
 import { evaluateEscalation } from "@/state/phases";
 
 /**
@@ -41,7 +49,7 @@ describe("language mirroring", () => {
     const greeting = await conv.send("hi");
     const text = greeting!.text.toLowerCase();
 
-    expect(text).toContain("saathi");
+    expect(text).toContain("sarthi");
     // An invitation to speak, not an interrogation.
     expect(text).toMatch(/tell me|what happened|what went wrong|own words|start anywhere|bataiye/);
     // Must not ask for entity, PAN, date or amount on turn one.
@@ -55,7 +63,23 @@ describe("language mirroring", () => {
     const r = await conv.send("vanakkam");
     expect(detectLanguage(r!.text).base).toBe("ta");
     expect(r!.text).toMatch(/[\u0B80-\u0BFF]/);
-    expect(r!.text).toContain("சாத்தி");
+    expect(r!.text).toContain("சாரதி");
+  });
+
+  it("2b. a Bengali greeting is answered in Bengali", async () => {
+    const conv = fresh();
+    const r = await conv.send("নমস্কার");
+    expect(detectLanguage(r!.text).base).toBe("bn");
+    expect(r!.text).toMatch(/[\u0980-\u09FF]/);
+    expect(r!.text).toContain("সাথী");
+  });
+
+  it("2c. a Gujarati greeting is answered in Gujarati", async () => {
+    const conv = fresh();
+    const r = await conv.send("કેમ");
+    expect(detectLanguage(r!.text).base).toBe("gu");
+    expect(r!.text).toMatch(/[\u0A80-\u0AFF]/);
+    expect(r!.text).toContain("સારથી");
   });
 
   it("3. switching Tamil to English switches the next reply to English", async () => {
@@ -158,6 +182,7 @@ describe("SEBI rules and safety", () => {
       entityType: "broker" as const,
       complaintCategory: "Non-receipt of funds",
       incidentDate: new Date().toISOString().slice(0, 10),
+      amountInvolved: 40000,
       reliefSought: "Refund",
     };
 
@@ -166,14 +191,13 @@ describe("SEBI rules and safety", () => {
     expect(conv.derived.canAutofill).toBe(false);
     expect(conv.derived.escalation.reason).toBe("not_emailed");
 
-    // Within 30 days of emailing, still blocked.
-    conv.confirmEmailSent(shiftDays(-10));
-    expect(conv.derived.canAutofill).toBe(false);
-    expect(conv.derived.escalation.reason).toBe("waiting");
-
-    // After 30 days, allowed.
-    conv.confirmEmailSent(shiftDays(-31));
+    // Emailed yesterday with a recorded date: eligible immediately.
+    // There is no waiting period by design.
+    conv.confirmEmailSent(shiftDays(-1));
     expect(conv.derived.escalation.eligible).toBe(true);
+    expect(conv.derived.canAutofill).toBe(false); // summary not confirmed yet
+    await conv.confirmSummary();
+    expect(conv.derived.canAutofill).toBe(true);
   });
 
   it("allows filing after rejection once the date is recorded and confirmed", async () => {
@@ -185,12 +209,13 @@ describe("SEBI rules and safety", () => {
       entityType: "broker",
       complaintCategory: "Non-receipt of funds",
       incidentDate: new Date().toISOString().slice(0, 10),
+      amountInvolved: 40000,
       reliefSought: "Refund",
     };
-    conv.recordRejection();
     // Rejection alone is not enough: the hard gate needs a recorded date.
+    conv.recordRejection();
     expect(conv.derived.canAutofill).toBe(false);
-    conv.confirmSummary();
+    await conv.confirmSummary();
     conv.confirmEmailSent(shiftDays(-40));
     expect(conv.state.priorContactConfirmed).toBe(true);
     expect(conv.derived.escalation.reason).toBe("rejected");
@@ -369,7 +394,8 @@ describe("greeting, repeats, empathy, email, rules, deadline", () => {
     expect(draft.bodyEn).toMatch(/AB1234/);
     expect(draft.bodyEn).toMatch(/2026-03-03|Mar 2026|03 Mar/);
     expect(draft.bodyEn).toMatch(/40,000|40000/);
-    expect(draft.bodyEn).toMatch(new RegExp(`${SCORES_RULES.preFilingEntityWaitDays.value} days`));
+    expect(draft.bodyEn).toMatch(/at the earliest/);
+    expect(draft.bodyEn).not.toMatch(/\b30 days\b/);
     expect(draft.bodyEn).toMatch(/SEBI SCORES/);
     expect(draft.bodyEn).toMatch(/reference|ticket number/i);
     expect(draft.bodyLocal.length).toBeGreaterThan(20);
@@ -424,7 +450,9 @@ describe("greeting, repeats, empathy, email, rules, deadline", () => {
       entityType: "broker",
       complaintCategory: "Non-receipt of funds",
       incidentDate: "2026-03-03",
+      amountInvolved: 40000,
       reliefSought: "Refund of the amount",
+      priorContactProof: "none",
       userLanguage: "en-IN",
     };
     await conv.send("please draft the email");
@@ -445,7 +473,6 @@ describe("greeting, repeats, empathy, email, rules, deadline", () => {
   });
 
   it("5b. escalation math reads from the verified rules, not literals", () => {
-    expect(WAIT_DAYS).toBe(SCORES_RULES.preFilingEntityWaitDays.value);
     expect(LIMIT_DAYS).toBe(SCORES_RULES.limitationDays.value);
   });
 
@@ -528,7 +555,9 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
       entityType: "broker" as const,
       complaintCategory: "Non-receipt of funds",
       incidentDate: "2026-03-03",
+      amountInvolved: 40000,
       reliefSought: "Refund",
+      priorContactProof: "none" as const,
       userLanguage: "en-IN",
     };
     // Even a model screaming AUTOFILL cannot move code off PREFLIGHT.
@@ -645,7 +674,9 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
       entityType: "broker",
       complaintCategory: "Non-receipt of funds",
       incidentDate: "2026-03-03",
+      amountInvolved: 40000,
       reliefSought: "Refund",
+      priorContactProof: "none",
       userLanguage: "en-IN",
     };
     await conv.send("blah blah");
@@ -857,7 +888,7 @@ describe("draft agreement override: words must never promise what code withholds
     }
   });
 
-  it("'Yes sure' with missing placeholders starts completion instead of opening Gmail", async () => {
+  it("'Yes sure' with missing placeholders shows the draft at once and opens Gmail (spec A.6)", async () => {
     const sent: Array<{ type: string }> = [];
     (globalThis as unknown as { chrome: unknown }).chrome = {
       runtime: { sendMessage: async (m: unknown) => { sent.push(m as never); return { ok: true }; } },
@@ -878,9 +909,11 @@ describe("draft agreement override: words must never promise what code withholds
         at: new Date().toISOString(),
       });
       const r = await conv.send("Yes sure");
-      // Placeholders remain, so nothing opens yet: the first one is asked.
-      expect(r?.emailDraft).toBeUndefined();
-      expect(sent.some((m) => m.type === "gmail/open")).toBe(false);
+      // Spec A.6: the draft is shown and Gmail opens on the agreement turn
+      // itself (placeholders included); gaps are collected afterwards.
+      expect(r?.emailDraft).toBeDefined();
+      expect(sent.some((m) => m.type === "gmail/open")).toBe(true);
+      expect(r?.emailDraft?.bodyEn).toMatch(/\[your client ID/);
       expect(r!.text).toMatch(/client ID|UCC/i);
       expect(conv.draftCompletion?.pending[0]).toBe("clientId");
     } finally {
@@ -934,8 +967,9 @@ describe("draft agreement override: words must never promise what code withholds
       expect(last?.emailDraft?.bodyEn).toMatch(/Priya Sharma/);
       expect(last?.emailDraft?.bodyEn).toMatch(/9876543210/);
       const gmail = sent.filter((m) => m.type === "gmail/open");
+      // Gmail opens once, on the agreement turn; the completion finale only
+      // re-attaches the send-ready draft, never a second tab.
       expect(gmail).toHaveLength(1);
-      expect(gmail[0]!.payload.body).not.toMatch(/\[/);
       expect(conv.emailFlow).toBe("awaitingSent");
     } finally {
       delete (globalThis as unknown as { chrome?: unknown }).chrome;
@@ -982,7 +1016,7 @@ describe("draft agreement override: words must never promise what code withholds
     }
   });
 
-  it("'Sure' alone after an offer starts completion (placeholders remain)", async () => {
+  it("'Sure' alone after an offer shows the draft at once (placeholders included)", async () => {
     const sent: Array<{ type: string }> = [];
     (globalThis as unknown as { chrome: unknown }).chrome = {
       runtime: { sendMessage: async (m: unknown) => { sent.push(m as never); return { ok: true }; } },
@@ -1003,9 +1037,9 @@ describe("draft agreement override: words must never promise what code withholds
         at: new Date().toISOString(),
       });
       const r = await conv.send("Sure");
-      // Nothing is filled yet, so the draft waits while placeholders are asked.
-      expect(r?.emailDraft).toBeUndefined();
-      expect(sent.some((m) => m.type === "gmail/open")).toBe(false);
+      // Draft shown at once with placeholders; gaps collected afterwards.
+      expect(r?.emailDraft).toBeDefined();
+      expect(sent.some((m) => m.type === "gmail/open")).toBe(true);
       expect(r!.text).toMatch(/client ID|UCC/i);
     } finally {
       delete (globalThis as unknown as { chrome?: unknown }).chrome;
@@ -1034,7 +1068,7 @@ describe("draft agreement override: words must never promise what code withholds
     }
   });
 
-  it("bare 'Yes' after an offer starts completion (placeholders remain)", async () => {
+  it("bare 'Yes' after an offer shows the draft at once (placeholders included)", async () => {
     const sent: Array<{ type: string }> = [];
     (globalThis as unknown as { chrome: unknown }).chrome = {
       runtime: { sendMessage: async (m: unknown) => { sent.push(m as never); return { ok: true }; } },
@@ -1055,8 +1089,8 @@ describe("draft agreement override: words must never promise what code withholds
         at: new Date().toISOString(),
       });
       const r = await conv.send("Yes");
-      expect(r?.emailDraft).toBeUndefined();
-      expect(sent.some((m) => m.type === "gmail/open")).toBe(false);
+      expect(r?.emailDraft).toBeDefined();
+      expect(sent.some((m) => m.type === "gmail/open")).toBe(true);
       expect(r!.text).toMatch(/client ID|UCC/i);
     } finally {
       delete (globalThis as unknown as { chrome?: unknown }).chrome;
@@ -1190,6 +1224,100 @@ describe("draft agreement override: words must never promise what code withholds
     expect(isSendReady({ bodyEn: "hello", subject: "s" })).toBe(true);
   });
 
+describe("agreement words: zaroor/bilkul count as yes (live transcript replay)", () => {
+  it("isAffirmation recognises Hindi agreement words", () => {
+    expect(isAffirmation("zaroor")).toBe(true);
+    expect(isAffirmation("Zaroor!")).toBe(true);
+    expect(isAffirmation("bilkul")).toBe(true);
+    expect(isAffirmation("haan zaroor")).toBe(true);
+    // Not agreement: denials and empty nods without an offer stay negative.
+    expect(isAffirmation("nahi")).toBe(false);
+    expect(isAffirmation("bilkul nahi")).toBe(false);
+  });
+
+  it("isAgreementToDraft fires on 'zaroor' right after the email offer", () => {
+    const offer =
+      "Kya aap chahte hain ki main aapke liye ek email ka draft taiyar kar dun?";
+    expect(isAgreementToDraft("zaroor", offer, false)).toBe(true);
+    expect(isAgreementToDraft("bilkul", offer, false)).toBe(true);
+    // No offer, nothing to agree with.
+    expect(isAgreementToDraft("zaroor", "Tell me what happened.", false)).toBe(false);
+    expect(isAgreementToDraft("zaroor", offer, true)).toBe(false);
+  });
+
+  it("'zaroor' after the offer shows the draft and opens Gmail the same turn", async () => {
+    const sent: Array<{ type: string }> = [];
+    (globalThis as unknown as { chrome: unknown }).chrome = {
+      runtime: { sendMessage: async (m: unknown) => { sent.push(m as never); return { ok: true }; } },
+    };
+    try {
+      const conv = fresh();
+      conv.hasGreeted = true;
+      conv.state = {
+        ...emptyState(),
+        issueSummaryEnglish: "Sale proceeds not credited.",
+        issueSummaryOriginal: "Sale proceeds not credited.",
+        entityName: "Zerodha",
+        clientIdFolioNoDpid: "AB1234",
+        amountInvolved: 100000,
+        incidentDate: "2026-09-04",
+        soldDescription: "Shares",
+        userName: "Priya Sharma",
+        userPhone: "9876543210",
+        userLanguage: "hi-Latn",
+      };
+      conv.history.push({
+        role: "agent",
+        text: "Kya aap chahte hain ki main aapke liye ek email ka draft taiyar kar dun?",
+        at: new Date().toISOString(),
+      });
+      const r = await conv.send("zaroor");
+      // The exact live failure: words promised a draft while nextAction
+      // stayed "none", so no card rendered. Now the override must fire.
+      expect(r?.emailDraft).toBeDefined();
+      expect(conv.lastGmailUrl).toMatch(/^https:\/\/mail\.google\.com\/mail\/\?view=cm/);
+      expect(sent.some((m) => m.type === "gmail/open")).toBe(true);
+    } finally {
+      delete (globalThis as unknown as { chrome?: unknown }).chrome;
+    }
+  });
+});
+
+describe("unverified rules: Hindi attributions are caught like English ones", () => {
+  it("statesUnverifiedRule flags SEBI-as-authority in any script", () => {
+    expect(
+      statesUnverifiedRule(
+        "SEBI ke rules ke anusar, shikayat darj karne se pehle company ko approach karna zaroori hai.",
+      ),
+    ).toBe(true);
+    expect(statesUnverifiedRule("SEBI rules require you to wait 30 days.")).toBe(true);
+    expect(statesUnverifiedRule("Niyam ke tahat pehle email karo.")).toBe(true);
+    // Mere mentions of SEBI/SEBI SCORES are not rules and must not flag.
+    expect(statesUnverifiedRule("You can file on SEBI SCORES.")).toBe(false);
+    expect(
+      statesUnverifiedRule("The company must answer within 21 days."),
+    ).toBe(false);
+    expect(statesUnverifiedRule("SCORES portal: https://scores.sebi.gov.in")).toBe(false);
+  });
+
+  it("sanitiseRuleLanguage removes the Hindi attribution and keeps the question", () => {
+    const out = sanitiseRuleLanguage(
+      "SEBI ke rules ke anusar, shikayat darj karne se pehle company ko approach karna zaroori hai. Kya aap chahte hain ki main email draft taiyar kar dun?",
+    );
+    expect(statesUnverifiedRule(out)).toBe(false);
+    expect(out).not.toMatch(/SEBI ke rules|niyam|kanoon/i);
+    expect(out).toMatch(/email draft/i);
+  });
+
+  it("promisedAction hears Hindi draft presentations, not Hindi offers", () => {
+    expect(promisedAction("Yeh lijiye aapka email draft tayar hai.")).toBe("draft_email");
+    // Interrogative offer: asks, does not present.
+    expect(
+      promisedAction("Kya aap chahte hain ki main aapke liye ek email ka draft taiyar kar dun?"),
+    ).toBeNull();
+  });
+});
+
 describe("memory", () => {
   it("clears everything on request", async () => {
     const conv = fresh();
@@ -1201,6 +1329,92 @@ describe("memory", () => {
     expect(conv.history).toHaveLength(0);
     expect(conv.state.entityName).toBeNull();
     expect(conv.hasGreeted).toBe(false);
+  });
+});
+
+describe("confirm continues: the ack is free, the flow moves", () => {
+  const complete = () => ({
+    ...emptyState(),
+    issueSummaryEnglish: "Funds not credited",
+    issueSummaryOriginal: "Funds not credited",
+    entityName: "Zerodha",
+    entityType: "broker" as const,
+    complaintCategory: "Non-receipt of funds",
+    incidentDate: new Date().toISOString().slice(0, 10),
+    amountInvolved: 40000,
+    reliefSought: "Refund",
+    priorContactProof: "none" as const,
+    userLanguage: "en-IN",
+  });
+
+  it("the confirmation event itself costs the model nothing, even when it is down", async () => {
+    let chatCalls = 0;
+    const conv = new Conversation({
+      llm: {
+        id: "throwing",
+        chat: async () => {
+          chatCalls++;
+          throw new Error("model unreachable");
+        },
+      },
+      stt: new MockSTTProvider(),
+    });
+    conv.hasGreeted = true;
+    conv.state = complete();
+    expect(conv.derived.phase).toBe("CONFIRM");
+
+    const followUp = await conv.send("Yes continue");
+    // One attempt total: the proactive follow-up's. The confirmation (flag +
+    // ack) never touched the model — otherwise this count would be higher,
+    // and with a dead model any model-driven confirm would have thrown.
+    expect(chatCalls).toBe(1);
+    expect(conv.summaryConfirmed).toBe(true);
+    const texts = conv.history.filter((t) => t.role === "agent").map((t) => t.text);
+    expect(texts.some((t) => /confirmed/i.test(t))).toBe(true);
+    expect(followUp).not.toBeNull();
+  });
+
+  it("'Looks right' continues proactively instead of stalling (button path)", async () => {
+    const conv = fresh();
+    conv.hasGreeted = true;
+    conv.state = complete();
+    const before = conv.history.length;
+    const followUp = await conv.confirmSummary();
+    expect(conv.summaryConfirmed).toBe(true);
+    expect(followUp).not.toBeNull();
+    expect(conv.history.length).toBeGreaterThan(before);
+    // Contact denied: the flow must leave CONFIRM for the email step.
+    expect(conv.derived.phase).toBe("PREFLIGHT_EMAIL");
+  });
+
+  it("AUTOFILL-ready confirm forces start_autofill even if the model says none", async () => {
+    const conv = new Conversation({
+      llm: {
+        id: "passive-stub",
+        chat: async () =>
+          JSON.stringify({
+            detectedLanguage: "en-IN",
+            reply: "All set.",
+            stateUpdates: {},
+            phase: "AUTOFILL",
+            nextAction: "none",
+            confidence: {},
+          }),
+      },
+      stt: new MockSTTProvider(),
+    });
+    conv.hasGreeted = true;
+    conv.state = {
+      ...complete(),
+      priorContactProof: "emailed",
+      priorContactDate: new Date().toISOString().slice(0, 10),
+      priorContactConfirmed: true,
+    };
+    expect(conv.derived.phase).toBe("CONFIRM");
+    const followUp = await conv.confirmSummary();
+    expect(followUp?.text).toBe("All set.");
+    // Words said "none", code says ready: code wins, so the UI fills.
+    expect(conv.lastAction).toBe("start_autofill");
   });
 });
 

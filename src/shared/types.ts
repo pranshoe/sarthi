@@ -21,6 +21,12 @@ export interface Attachment {
   name: string;
   size: number;
   type: string;
+  /** OCR/text extraction result, filled by the Scan button. */
+  extracted?: {
+    ticketNumber: string | null;
+    date: string | null;
+    clientId: string | null;
+  };
 }
 
 export interface GrievanceState {
@@ -117,6 +123,8 @@ export interface ChatTurn {
   synthetic?: boolean;
   /** Present when this turn produced a broker-email draft. */
   emailDraft?: EmailDraft;
+  /** Present when this turn showed the review card (nextAction show_summary). */
+  review?: { shownAt: string; missingAtShow: string[] };
 }
 
 /** A pre-flight broker email. Built by code from GrievanceState, never sent. */

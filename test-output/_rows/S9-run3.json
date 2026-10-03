@@ -1,0 +1,49 @@
+{
+ "id": "S9",
+ "title": "Dated contact proceeds to review with no waiting-period talk",
+ "hard": false,
+ "run": 3,
+ "mode": "live",
+ "passed": true,
+ "checks": [
+  {
+   "name": "T1 no waiting talk",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "T2 no waiting talk",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "T3 no waiting talk",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "T4 no waiting talk",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "T5 no waiting talk",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  },
+  {
+   "name": "proceeded past intake",
+   "pass": true,
+   "reason": "",
+   "turn": 5
+  }
+ ],
+ "failures": [],
+ "turns": 5,
+ "llmCalls": 5
+}

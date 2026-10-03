@@ -1,7 +1,7 @@
-# Saathi — conversational grievance agent for SEBI SCORES & IEPF
+# Sarthi — conversational grievance agent for SEBI SCORES & IEPF
 
-A Manifest V3 Chrome extension. The user talks to Saathi in their own language;
-Saathi prepares the complaint and fills the government portal. The user always
+A Manifest V3 Chrome extension. The user talks to Sarthi in their own language;
+Sarthi prepares the complaint and fills the government portal. The user always
 reviews, solves any CAPTCHA, and clicks Submit.
 
 ## The rules the code enforces

@@ -32,6 +32,14 @@ export interface FieldMapping {
    * case-insensitively as a substring against option text.
    */
   optionMatchers?: string[];
+  /**
+   * For selects whose state vocabulary differs from the portal's (e.g. our
+   * entityType "broker" vs the portal's "Registered Intermediary"): maps a
+   * lowercased state value to the portal-side phrase to match. Unmapped
+   * values fall through to the plain matching below, and report ambiguous
+   * rather than guessing when nothing matches.
+   */
+  valueAliases?: Record<string, string>;
   /** Label shown on the review checklist. */
   label: string;
   /** Ask before filling. Used for anything that changes the complaint's meaning. */
@@ -55,7 +63,13 @@ export interface PortalAdapter {
 export const scoresAdapter: PortalAdapter = {
   id: "scores",
   displayName: "SEBI SCORES",
-  hostnames: ["scores.sebi.gov.in"],
+  hostnames: [
+    "scores.sebi.gov.in",
+    // Local test doubles (mock-scores/). Harmless in production: nobody
+    // serves real SCORES on loopback, and S15 depends on this match.
+    "localhost",
+    "127.0.0.1",
+  ],
   pathIncludes: ["complaint", "register", "lodge"],
   domMarkers: ["grievance-redressal", "complaint-registration"],
   neverTouch: [
@@ -81,6 +95,14 @@ export const scoresAdapter: PortalAdapter = {
         "listed company",
         "market infrastructure",
       ],
+      // Our internal labels vs the portal's: a broker IS a registered
+      // intermediary on SCORES. RTA/IEPF match nothing on purpose — neither
+      // dropdown offers them, so the report says ambiguous and the user
+      // chooses instead of us mis-filing.
+      valueAliases: {
+        broker: "registered intermediary",
+        "listed company": "listed company",
+      },
       label: "Type of entity",
     },
     {

@@ -1,5 +1,4 @@
 import type { EmailDraft, GrievanceState } from "@/shared/types";
-import { SCORES_RULES } from "@/data/scoresRules";
 import { findBrokerContact } from "@/data/brokers";
 import { formatHuman } from "@/state/dates";
 
@@ -8,9 +7,9 @@ import { formatHuman } from "@/state/dates";
  *
  * Code owns the structure, so every required part is always present:
  * client ID (or placeholder), incident date, amount, what was sold
- * (or placeholder), a resolve-within period taken from SCORES_RULES
- * (never a hardcoded number), the SEBI SCORES escalation line, and a
- * request for a reference/ticket number.
+ * (or placeholder), the SEBI SCORES escalation line, and a
+ * request for a reference/ticket number. No resolve-within period is stated:
+ * timelines come only from SCORES_RULES, which carries no pre-filing wait.
  *
  * The agent NEVER sends this. It is shown in chat and opened in Gmail
  * compose for the user to review and send themselves.
@@ -28,7 +27,6 @@ const PLACEHOLDERS = {
 export function buildEmailDraft(state: GrievanceState): EmailDraft {
   const contact = findBrokerContact(state.entityName);
   const entity = state.entityName?.trim() || "[Broker / company name]";
-  const waitDays = SCORES_RULES.preFilingEntityWaitDays.value;
 
   const clientId = state.clientIdFolioNoDpid?.trim() || PLACEHOLDERS.clientId;
   const date = state.incidentDate ? formatHuman(state.incidentDate) : "[date of the incident]";
@@ -57,7 +55,7 @@ export function buildEmailDraft(state: GrievanceState): EmailDraft {
     "",
     `I request you to ${relief}.`,
     "",
-    `You are requested to resolve this within ${waitDays} days, the regulator-prescribed turnaround time. If it is not resolved by then, I will escalate the matter by lodging a complaint on SEBI SCORES.`,
+    `You are requested to resolve this at the earliest. If it is not resolved, I will escalate the matter by lodging a complaint on SEBI SCORES.`,
     "",
     "Please share a reference or ticket number for this complaint for my records.",
     "",
@@ -72,7 +70,6 @@ export function buildEmailDraft(state: GrievanceState): EmailDraft {
     bodyEn,
     bodyLocal: summariseDraft(state.userLanguage, {
       entity,
-      waitDays,
       hasContact: contact !== null,
     }),
     contact: contact ? { email: contact.email, role: contact.role } : null,
@@ -137,7 +134,7 @@ export function isSendReady(draft: { bodyEn: string; subject: string }): boolean
  */
 function summariseDraft(
   lang: string,
-  facts: { entity: string; waitDays: number; hasContact: boolean },
+  facts: { entity: string; hasContact: boolean },
 ): string {
   const base = (lang.split("-")[0] ?? "en").toLowerCase();
   const t = SUMMARIES[base] ?? SUMMARIES.en!;
@@ -146,37 +143,36 @@ function summariseDraft(
 
 interface DraftFacts {
   entity: string;
-  waitDays: number;
   hasContact: boolean;
 }
 
 const SUMMARIES: Record<string, (f: DraftFacts) => string> = {
   en: (f) =>
-    `This email asks ${f.entity} to resolve your complaint within ${f.waitDays} days, and says you will go to SEBI SCORES if they do not. ` +
+    `This email asks ${f.entity} to resolve your complaint, and says you will go to SEBI SCORES if they do not. ` +
     (f.hasContact
       ? "I filled in their grievance email address for you."
       : "I could not verify their grievance email, so please check it on their website before sending.") +
     ` It also asks them for a reference number. Replace anything in [brackets] with your details.`,
   hi: (f) =>
-    `यह ईमेल ${f.entity} से ${f.waitDays} दिन में शिकायत सुलझाने को कहता है, और कहता है कि नहीं सुलझा तो आप SEBI SCORES में जाएँगे। ` +
+    `यह ईमेल ${f.entity} से शिकायत सुलझाने को कहता है, और कहता है कि नहीं सुलझा तो आप SEBI SCORES में जाएँगे। ` +
     (f.hasContact
       ? "मैंने उनका शिकायत ईमेल पता भर दिया है।"
       : "उनका शिकायत ईमेल पता सत्यापित नहीं हो सका, इसलिए भेजने से पहले उनकी वेबसाइट पर जाँच लें।") +
     ` इसमें रेफरेंस नंबर भी माँगा गया है। [कोष्ठक] वाली जानकारी अपनी भर लें।`,
   ta: (f) =>
-    `இந்த மின்னஞ்சல் ${f.entity}-ஐ ${f.waitDays} நாட்களில் புகாரைத் தீர்க்கக் கேட்கிறது, இல்லையெனில் SEBI SCORES-க்குச் செல்வதாகக் கூறுகிறது. ` +
+    `இந்த மின்னஞ்சல் ${f.entity}-ஐ புகாரைத் தீர்க்கக் கேட்கிறது, இல்லையெனில் SEBI SCORES-க்குச் செல்வதாகக் கூறுகிறது. ` +
     (f.hasContact
       ? "அவர்களின் புகார் மின்னஞ்சல் முகவரியை நிரப்பிவிட்டேன்."
       : "அவர்களின் புகார் மின்னஞ்சல் முகவரியை உறுதிப்படுத்த முடியவில்லை, அனுப்பும் முன் அவர்களின் இணையதளத்தில் பார்க்கவும்.") +
     ` குறிப்பு எண்ணும் கேட்கப்பட்டுள்ளது. [அடைப்புக்குறி] விவரங்களை நிரப்பவும்.`,
   kn: (f) =>
-    `ಈ ಇಮೇಲ್ ${f.entity} ಅವರನ್ನು ${f.waitDays} ದಿನಗಳಲ್ಲಿ ದೂರು ಪರಿಹರಿಸಲು ಕೇಳುತ್ತದೆ, ಇಲ್ಲದಿದ್ದರೆ SEBI SCORES-ಗೆ ಹೋಗುವುದಾಗಿ ಹೇಳುತ್ತದೆ. ` +
+    `ಈ ಇಮೇಲ್ ${f.entity} ಅವರನ್ನು ದೂರು ಪರಿಹರಿಸಲು ಕೇಳುತ್ತದೆ, ಇಲ್ಲದಿದ್ದರೆ SEBI SCORES-ಗೆ ಹೋಗುವುದಾಗಿ ಹೇಳುತ್ತದೆ. ` +
     (f.hasContact
       ? "ಅವರ ದೂರು ಇಮೇಲ್ ವಿಳಾಸವನ್ನು ತುಂಬಿದ್ದೇನೆ."
       : "ಅವರ ದೂರು ಇಮೇಲ್ ವಿಳಾಸವನ್ನು ಖಚಿತಪಡಿಸಲಾಗಲಿಲ್ಲ, ಕಳುಹಿಸುವ ಮೊದಲು ಅವರ ವೆಬ್‌ಸೈಟ್‌ನಲ್ಲಿ ಪರಿಶೀಲಿಸಿ.") +
     ` ಉಲ್ಲೇಖ ಸಂಖ್ಯೆಯನ್ನೂ ಕೇಳಲಾಗಿದೆ. [ಆವರಣ] ವಿವರಗಳನ್ನು ತುಂಬಿ.`,
   te: (f) =>
-    `ఈ ఇమెయిల్ ${f.entity}ను ${f.waitDays} రోజుల్లో ఫిర్యాదు పరిష్కరించమని అడుగుతుంది, లేకపోతే SEBI SCORESకు వెళ్తామని చెబుతుంది. ` +
+    `ఈ ఇమెయిల్ ${f.entity}ను ఫిర్యాదు పరిష్కరించమని అడుగుతుంది, లేకపోతే SEBI SCORESకు వెళ్తామని చెబుతుంది. ` +
     (f.hasContact
       ? "వారి ఫిర్యాదు ఇమెయిల్ చిరునామాను నింపాను."
       : "వారి ఫిర్యాదు ఇమెయిల్ చిరునామాను ధృవీకరించలేకపోయాను, పంపే ముందు వారి వెబ్‌సైట్‌లో చూడండి.") +

@@ -24,7 +24,14 @@ import { config } from "@/shared/config";
  * Verified working with schema-constrained output: gemini-3.5-flash-lite,
  * gemini-flash-lite-latest, gemini-3-flash-preview.
  */
-const FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3-flash-preview"];
+const FALLBACK_MODELS = [
+  "gemini-3.5-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3-flash-preview",
+  // Stable GA name, last resort: preview aliases flap with 404s (seen live),
+  // a GA model usually survives the same window.
+  "gemini-2.0-flash",
+];
 
 /**
  * Calls go to the local proxy, which injects the key server-side.
@@ -121,31 +128,69 @@ export class GeminiLLMProvider implements LLMProvider {
     const t0 = performance.now();
     // Try the configured model, then walk the fallback chain on a hard failure.
     const chain = [this.model, ...FALLBACK_MODELS.filter((m) => m !== this.model)];
-    let res: Response | null = null;
-    let usedModel = this.model;
     let lastError = "";
+    let usedModel = this.model;
+    let rateWaits = 0;
 
-    for (const model of chain) {
-      res = await fetch(proxyUrl(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, model }),
-      });
-      if (res.ok) {
-        if (model !== this.model) {
-          console.warn(`[saathi] ${this.model} unavailable, using ${model}`);
+    // Three passes over the chain: upstream 404/503 windows have knocked out
+    // every model at once for minutes (seen live mid-suite), then recovered.
+    // Short waits beat a dead turn; the offline fallback covers the rest.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      for (const model of chain) {
+        let res: Response | null = null;
+        try {
+          res = await fetch(proxyUrl(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...body, model }),
+          });
+        } catch (e) {
+          lastError = `${model} -> network ${e instanceof Error ? e.message : String(e)}`;
+          continue;
         }
-        usedModel = model;
-        break;
+        // 429 is per-minute quota exhaustion, not a dead model: one pause
+        // to let the quota window roll over, then retry the SAME model
+        // instead of burning the rest of the chain at full speed.
+        // (The harness additionally paces turns to stay under quota.)
+        if (res.status === 429 && rateWaits < 1) {
+          rateWaits++;
+          lastError = `${model} -> 429 rate-limited (waiting out the minute)`;
+          await new Promise((r) => setTimeout(r, 30000));
+          try {
+            res = await fetch(proxyUrl(), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...body, model }),
+            });
+          } catch (e) {
+            lastError = `${model} -> network ${e instanceof Error ? e.message : String(e)}`;
+            continue;
+          }
+        }
+        if (res.ok) {
+          if (model !== this.model) {
+            console.warn(`[sarthi] ${this.model} unavailable, using ${model}`);
+          }
+          usedModel = model;
+          return this.readText(res, usedModel, t0);
+        }
+        lastError = `${model} -> ${res.status} ${(await res.text().catch(() => "")).slice(0, 120)}`;
+        // 400 means our request is malformed; retrying other models will not help.
+        if (res.status === 400 || res.status === 401 || res.status === 403) {
+          throw new Error(`Gemini: ${lastError}`);
+        }
       }
-      lastError = `${model} -> ${res.status} ${(await res.text().catch(() => "")).slice(0, 120)}`;
-      // 400 means our request is malformed; retrying other models will not help.
-      if (res.status === 400 || res.status === 401 || res.status === 403) throw new Error(`Gemini: ${lastError}`);
-      res = null;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 5000));
     }
 
-    if (!res) throw new Error(`Gemini: every model failed. Last: ${lastError}`);
+    const hint =
+      /-> 404\b/.test(lastError) || /unknown route/.test(lastError)
+        ? " (every attempt 404'd: the running proxy is almost certainly older than this bundle — kill it, run `npm run proxy` from the current sources, and reload the extension)"
+        : "";
+    throw new Error(`Gemini: every model failed. Last: ${lastError}${hint}`);
+  }
 
+  private async readText(res: Response, usedModel: string, t0: number): Promise<string> {
     const json = (await res.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
       usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };

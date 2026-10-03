@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Saathi - Investor Grievance Assistant",
+  "name": "Sarthi - Investor Grievance Assistant",
   "version": "0.1.0",
   "description": "Talks to you in your language, then fills your SEBI SCORES or IEPF complaint for you. You review and submit.",
   "minimum_chrome_version": "116",
@@ -9,12 +9,12 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Open Saathi"
+    "default_title": "Open Sarthi"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "permissions": ["storage", "activeTab", "sidePanel", "scripting", "alarms", "notifications"],
+  "permissions": ["storage", "activeTab", "tabs", "sidePanel", "scripting", "alarms", "notifications"],
   "host_permissions": [
     "https://scores.sebi.gov.in/*",
     "https://*.iepf.gov.in/*",

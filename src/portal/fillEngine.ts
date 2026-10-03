@@ -5,6 +5,7 @@ import {
   buildComplaintBody,
   type FieldMapping,
 } from "./adapter";
+import { attachToInput, guessFileInput } from "./fileAttach";
 import { config } from "@/shared/config";
 
 /**
@@ -17,7 +18,7 @@ import { config } from "@/shared/config";
  * config cannot get us into trouble.
  */
 
-const HIGHLIGHT = "saathi-filled";
+const HIGHLIGHT = "sarthi-filled";
 
 export interface FillOptions {
   /** Called before filling a field marked `confirm`. */
@@ -100,7 +101,7 @@ Respond ONLY with the raw CSS selector string (e.g., input[name='new_name']), no
     }
     return null;
   } catch (e) {
-    console.warn("[saathi] Self-healing failed for", field.label, e);
+    console.warn("[sarthi] Self-healing failed for", field.label, e);
     return null;
   }
 }
@@ -154,7 +155,7 @@ export function matchOption(
 
 function highlight(el: HTMLElement): void {
   el.classList.add(HIGHLIGHT);
-  el.setAttribute("data-saathi-filled", "true");
+  el.setAttribute("data-sarthi-filled", "true");
   if (el instanceof HTMLElement) {
     el.style.transition = "box-shadow .3s ease";
     el.style.boxShadow = "0 0 0 3px rgba(26,86,219,.35)";
@@ -255,10 +256,15 @@ export async function fillPortal(
     if (field.strategy === "select") {
       const sel = el as HTMLSelectElement;
       const options = [...sel.options].map((o) => ({ value: o.value, text: o.text }));
-      const wanted = (field.optionMatchers ?? []).find((m) => valueFor(field, state) &&
-        String(valueFor(field, state)).toLowerCase().includes(m.toLowerCase()));
+      // Translate our vocabulary to the portal's before matching, so
+      // state values like "broker" resolve to "Registered Intermediary".
+      const rawValue = valueFor(field, state);
+      const stateValue =
+        field.valueAliases?.[String(rawValue ?? "").toLowerCase()] ?? rawValue;
+      const wanted = (field.optionMatchers ?? []).find((m) => stateValue &&
+        String(stateValue).toLowerCase().includes(m.toLowerCase()));
       const target =
-        matchOption(options, String(valueFor(field, state) ?? "")) ??
+        matchOption(options, String(stateValue ?? "")) ??
         (wanted ? matchOption(options, wanted) : null);
 
       if (!target) {
@@ -266,7 +272,7 @@ export async function fillPortal(
           key: String(field.key),
           selector: used,
           status: "ambiguous",
-          detail: `No option matched "${valueFor(field, state) ?? ""}". Choose it yourself.`,
+          detail: `No option matched "${rawValue ?? ""}". Choose it yourself.`,
         });
         continue;
       }
@@ -311,6 +317,34 @@ export async function fillPortal(
       status: "filled",
       detail: `${value.length} characters`,
     });
+  }
+
+  // Supporting documents: attach in-memory PDFs to the page's file input.
+  // Never touches Submit or CAPTCHA; failures are reported, not thrown.
+  if (state.attachments.length > 0) {
+    const fileSel = guessFileInput();
+    if (!fileSel) {
+      report.results.push({
+        key: "attachments",
+        selector: "(no file input found)",
+        status: "not_found",
+        detail: `${state.attachments.length} document(s) held, no upload field on this page`,
+      });
+    } else if (attachToInput(fileSel, state.attachments)) {
+      report.results.push({
+        key: "attachments",
+        selector: fileSel,
+        status: "filled",
+        detail: `${state.attachments.length} document(s) attached: ${state.attachments.map((a) => a.name).join(", ")}`,
+      });
+    } else {
+      report.results.push({
+        key: "attachments",
+        selector: fileSel,
+        status: "ambiguous",
+        detail: "Browser blocked programmatic attach — attach manually",
+      });
+    }
   }
 
   return report;

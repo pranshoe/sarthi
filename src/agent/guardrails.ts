@@ -122,6 +122,143 @@ export function violatesGuardrails(text: string): boolean {
   return BANNED.some((re) => re.test(text));
 }
 
+/**
+ * Day counts the agent is allowed to state, because they come from
+ * SCORES_RULES (21-day ATR, 15-day reviews/feedback, 365-day limitation).
+ * Anything else with a day/week/month unit is an invented rule.
+ */
+export const ALLOWED_DAY_COUNTS = [21, 15, 365];
+
+/**
+ * True when the reply states a process timeline or legal rule we have not
+ * verified: a day count outside scoresRules, "rules require" language, or a
+ * SEBI/rules authority claim in any language or script (Hindi "SEBI ke rules
+ * ke anusar" dodges the English-only patterns — seen live).
+ * Phone numbers, years and "one year" (no digits) never match: the unit
+ * pattern requires day/week/month right after the number.
+ */
+export function statesUnverifiedRule(text: string): boolean {
+  const t = text ?? "";
+  if (/\b30\s*days?\b/i.test(t)) return true; // abolished waiting period, never say it
+  if (/\brules?\s+require[sd]?\b/i.test(t)) return true;
+  if (/\bSEBI\s+(rules|requires|mandates)\b/i.test(t)) return true;
+  // "SEBI ke rules ke anusar", "SEBI ke niyam", "SEBI kanoon ke tahat" (+Devanagari).
+  if (/\bSEBI\b.{0,50}\b(ke\s+rules?|rules?\s+ke|niyam|niyamon|kanoon|kaanoon|kayde|नियम|कानून)\b/i.test(t)) return true;
+  // Bare rules-as-authority in Hindi/Hinglish, with or without SEBI named.
+  if (/\b(rules?|niyam|kanoon|kaanoon)\s+ke\s+(anusar|anusaar|tahat|mutabiq)\b/i.test(t)) return true;
+  if (/(नियम|कानून)\s+के\s+(तहत|अनुसार)/.test(t)) return true;
+  const counts = t.match(/(\d+)\s*(days?|weeks?|months?)\b/gi) ?? [];
+  for (const c of counts) {
+    const n = Number(c.match(/\d+/)?.[0]);
+    if (Number.isFinite(n) && !ALLOWED_DAY_COUNTS.includes(n)) return true;
+  }
+  return false;
+}
+
+/**
+ * Deterministic rewrite applied when the model states an unverified timeline
+ * or rule even after the repair pass. The reply keeps its shape and question;
+ * only the offending language is replaced with verified-safe wording.
+ * Guarantees the S8 corpus scan can never fail on a live turn.
+ */
+export function sanitiseRuleLanguage(text: string): string {
+  let out = text ?? "";
+  out = out.replace(
+    /\bSEBI rules? require[^.?!]*[.?!]/gi,
+    "Before SCORES, the company needs to have been contacted first. ",
+  );
+  out = out.replace(
+    /\bSEBI\s+(rules|requires|mandates)\b[^.?!]*[.?!]/gi,
+    "I'm not sure about that detail — please check scores.sebi.gov.in. ",
+  );
+  // Hindi/Hinglish authority claims ("SEBI ke rules ke anusar, ... zaroori
+  // hai."): drop the whole sentence, same as the English equivalents above.
+  out = out.replace(
+    /[^.?!]*\bSEBI\b[^.?!]*\b(ke\s+rules?|rules?\s+ke|niyam|niyamon|kanoon|kaanoon|kayde|नियम|कानून)\b[^.?!]*[.?!]/gi,
+    "Before SCORES, the company needs to have been contacted first. ",
+  );
+  out = out.replace(
+    /[^.?!]*\b((rules?|niyam|kanoon|kaanoon)\s+ke\s+(anusar|anusaar|tahat|mutabiq)|(नियम|कानून)\s+के\s+(तहत|अनुसार))\b[^.?!]*[.?!]/gi,
+    "Before SCORES, the company needs to have been contacted first. ",
+  );
+  out = out.replace(
+    /\b(\d+)\s*(days?|weeks?|months?)\b/gi,
+    (m, n) => (ALLOWED_DAY_COUNTS.includes(Number(n)) ? m : "some time"),
+  );
+  return out.replace(/\s{2,}/g, " ").trim();
+}
+
+/**
+ * True when the reply declares intake complete ("I have all the details").
+ * The caller decides whether anything is actually still missing.
+ */
+export function declaresReadiness(text: string): boolean {
+  return /\bi (have|ve got) (all|everything)|we have everything|all the details (are in|have been)|everything (i need|needed) is (in|here)|i('ve| have) got everything\b/i.test(
+    text ?? "",
+  );
+}
+
+interface AskPattern {
+  field: string;
+  re: RegExp;
+}
+
+/**
+ * Which known field (if any) a reply is asking about. Conservative on
+ * purpose: only strong, unambiguous question patterns match, across English
+ * and the most common romanized/Indic keywords (UCC/PAN are script-agnostic).
+ * Returns null when the reply asks nothing recognizable.
+ */
+const ASK_PATTERNS: AskPattern[] = [
+  {
+    field: "entityName",
+    re: /which (broker|company)|(?:broker|company|entity).{0,25}name|name of (the )?(broker|company|entity)|who (is|are) (it|this|they)|kis (broker|company)|कौन (सी |सा )? ?(ब्रोकर|कंपनी)|எந்த (டீலர்|நிறுவனம்)|ಯಾವ (ಬ್ರೋಕರ್|ಕಂಪನಿ)/i,
+  },
+  {
+    field: "incidentDate",
+    re: /when did|what date|which date|date.{0,20}(happen|incident|occur)|kab hua|कब हुआ|எப்போது|ಯಾವಾಗ/i,
+  },
+  {
+    field: "amountInvolved",
+    re: /how much|what amount|amount involved|kitni (rashi|rakam)|राशि|எவ்வளவு|எத்தனை|ಎಷ್ಟು/i,
+  },
+  {
+    field: "clientIdFolioNoDpid",
+    re: /client.?id|UCC|folio|dp.?id|demat account/i,
+  },
+  {
+    field: "reliefSought",
+    re: /what would you like|what outcome|what do you want|relief|kya chahte|என்ன வேண்டும்|ಏನು ಬೇಕು/i,
+  },
+  {
+    field: "complaintCategory",
+    re: /what kind of (problem|complaint|issue)|kis tarah|किस तरह|என்ன மாதிரி|ಯಾವ ರೀತಿಯ/i,
+  },
+  {
+    field: "entityType",
+    re: /who is this company to you|what do they do for you|broker.*or.*(company|listed)|listed company.*\?/i,
+  },
+  {
+    field: "priorContact",
+    re: /(did|have) you (email|write|contact)|already (emailed|written|contacted)|likha (hai|tha)?\s*\?|email bheji/i,
+  },
+];
+
+export function askedAboutField(
+  reply: string,
+  known: Record<string, unknown>,
+): string | null {
+  const text = reply ?? "";
+  for (const { field, re } of ASK_PATTERNS) {
+    if (!re.test(text)) continue;
+    const v = known[field];
+    if (v !== null && v !== undefined && String(v).trim() !== "") return field;
+    // priorContact is "known" when the user has taken any position on it.
+    if (field === "priorContact" && known.priorContact) return field;
+  }
+  return null;
+}
+
 /** Replace a non-compliant reply with a neutral, still-useful line. */
 export function neutralise(text: string, lang: string): string {
   const fallback: Record<string, string> = {
@@ -225,6 +362,45 @@ export function truncateForSpeech(text: string, maxSentences: number): string {
     .filter(Boolean);
   if (parts.length <= maxSentences) return text;
   return parts.slice(0, maxSentences).join(" ");
+}
+
+/**
+ * What artifact (if any) a reply presents to the user. Used to keep words
+ * and actions in agreement: a reply saying "here is the draft" must carry
+ * nextAction draft_email or the UI never renders it. Interrogative offers
+ * ("Shall I draft…?") do NOT count — only present-tense presentations.
+ */
+export function promisedAction(
+  reply: string,
+): "draft_email" | "show_summary" | "start_autofill" | null {
+  const t = reply ?? "";
+  if (
+    /(here is|here's) (the|your|a) (draft|email)|i('ll| will) (draft|prepare) (the|an|this|your) (email|draft)/i.test(
+      t,
+    )
+  ) {
+    return "draft_email";
+  }
+  // Hindi/Hinglish present-tense presentations ("Yeh lijiye aapka email
+  // draft tayar hai"). Interrogative offers ("draft taiyar kar dun?") do
+  // NOT match: they ask, they don't present.
+  if (
+    /(yeh lijiye|yeh raha|ye raha|lijiye).{0,40}\b(draft|email)\b/i.test(t) ||
+    /\b(draft|email)\b.{0,40}(tai?yar\s+(hai|kar diya hai)|ban ga(yi|ya)|ready hai)/i.test(t)
+  ) {
+    return "draft_email";
+  }
+  if (
+    /(here is|here's).*(summary|what i understood)|review (the|this|below)|please review/i.test(
+      t,
+    )
+  ) {
+    return "show_summary";
+  }
+  if (/i('ll| will) fill|filling .*form (for|now)|opening .*scores/i.test(t)) {
+    return "start_autofill";
+  }
+  return null;
 }
 
 /**

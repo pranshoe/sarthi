@@ -23,6 +23,19 @@ export function mergeState(
 ): GrievanceState {
   const next: GrievanceState = { ...current };
 
+  // Amounts belong in amountInvolved, never in reliefSought (spec A.4):
+  // "Recovery of Rs. 40,000" keeps its words but loses its digits.
+  // (In-place: every caller passes a fresh updates object.)
+  if (typeof updates.reliefSought === "string" && /[\d,]{4,}/.test(updates.reliefSought)) {
+    const cleaned = updates.reliefSought
+      .replace(/(?:rs\.?|inr|₹|rupees?)?\s*[\d,]{4,}(?:\.\d+)?/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+([.,])/g, "$1")
+      .trim();
+    if (cleaned.length > 3) updates.reliefSought = cleaned;
+    else delete updates.reliefSought;
+  }
+
   const strFields = [
     "complaintCategory",
     "entityName",
@@ -255,11 +268,6 @@ export function computeDerived(
   const blockers: string[] = [];
   if (escalation.expired) blockers.push("Outside the SCORES limitation period.");
   if (phase === "CONFIRM") blockers.push("Waiting for you to confirm what I understood.");
-  if (phase === "PREFLIGHT_EMAIL" && escalation.reason === "waiting") {
-    blockers.push(
-      `The company has ${escalation.daysLeft} more days to respond before SCORES will accept this.`,
-    );
-  }
 
   // We only fill the portal when every required field exists, the summary is
   // confirmed, and contact with the company is confirmed with a date.

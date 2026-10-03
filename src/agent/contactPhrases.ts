@@ -10,19 +10,27 @@
 export const EXPLICIT_DENIAL =
   /\b(haven't|hasn't|didn't|never)\s+(written|wrote|emailed?|e-mailed|contacted|sent|complained)\b|\bnot\s+(written|sent|emailed?|contacted)\b|\bnot\s+yet\b|नहीं\s+(लिखा|भेजा)|எழுதவில்லை|அனுப்பவில்லை|ಬರೆದಿಲ್ಲ|ಕಳುಹಿಸಿಲ್ಲ/i;
 
-/** A bare yes/no-word with nothing else. */
 /** A bare "no" with nothing else. Only meaningful in a contact context. */
 export const BARE_DENIAL = /^(no|nahi|nahin|illa|illai|ledu|alla)\s*[.!…]*$/i;
 
-/** A bare yes-word with nothing else. */
+/**
+ * "No I didn't", "No, I haven't written" — a denial with a verb attached.
+ * Stronger than BARE_DENIAL (which is context-gated); this form denies
+ * contact wherever it appears.
+ */
+export const DENIAL_WITH_VERB =
+  /^(no|nahi|nahin|illa|illai|ledu|alla)[,.]?\s+(i\s+)?(haven't|hasn't|didn't|never|don't|do not|have not|has not|did not)\b/i;
+
+/** A bare yes-word with nothing else. Covers English, romanized Hindi
+ * ("zaroor", "bilkul" are how agreement usually sounds), and native scripts. */
 export const BARE_AFFIRM =
-  /^(yes|yeah|yep|haan|haa|haanji|sure|okay|\bok\b|sari|சரி|ஆம்|ಹೌದು|ಸರಿ|సరే|అవును)\s*[.!…]*$/i;
+  /^(yes|yeah|yep|haan|haa|haanji|sure|okay|\bok\b|sari|zaroor|zarur|bilkul|சரி|ஆம்|ಹೌದು|ಸರಿ|సరే|అవును)\s*[.!…]*$/i;
 
 /** Standalone softeners that read as agreement in context. */
 const SOFTENER_ONLY =
-  /^(sure|please|pls|thanks|thank you|thankyou|definitely|go ahead|do it|kar do|karo)\s*[.!…]*$/i;
+  /^(sure|please|pls|thanks|thank you|thankyou|definitely|go ahead|do it|kar do|karo|zaroor|bilkul)\s*[.!…]*$/i;
 const TRAILING_SOFTENER =
-  /\s*(sure|please|pls|thanks|thank you|thankyou|definitely|go ahead|do it|kar do|karo)\s*[.!…]*$/i;
+  /\s*(sure|please|pls|thanks|thank you|thankyou|definitely|go ahead|do it|kar do|karo|zaroor|bilkul)\s*[.!…]*$/i;
 
 /**
  * "Yes sure", "Yeah please", "Sure" — an affirmation with at most a softener
@@ -65,7 +73,7 @@ export const CONTACT_CLAIM =
   /\b(already\s+(written|wrote|emailed?|sent|contacted)|have\s+(written|wrote|emailed?)|wrote\s+to\s+them|emailed?\s+them|sent\s+(them\s+)?(an?\s+)?(email|mail|letter))\b/i;
 
 export const EMAIL_AGREEMENT =
-  /\b(yes|yeah|haan|haa|sari|okay|\bok\b|sure)\b.{0,25}\b(draft|email|mail)\b|\b(draft|prepare|make|banao|bana)\b.{0,25}\b(email|mail|it)\b|बना.*(दो|दीजिए)|தயாரி|ಸಿದ್ಧಪಡಿಸಿ|సిద్ధం/i;
+  /\b(yes|yeah|haan|haa|sari|okay|\bok\b|sure|zaroor|zarur|bilkul)\b.{0,25}\b(draft|email|mail)\b|\b(draft|prepare|make|banao|bana)\b.{0,25}\b(email|mail|it)\b|बना.*(दो|दीजिए)|தயாரி|ಸಿದ್ಧಪಡಿಸಿ|సిద్ధం/i;
 
 /** "It's sent" — only interpreted as such while a draft is pending. */
 export const DONE_MESSAGE =
@@ -76,7 +84,7 @@ export const SKIP_FIELD =
   /\b(skip|skip it|leave it|leave blank|don't know|dont know|do not know|no idea|later|pata nahi)\b/i;
 
 const TICKET_LABELED =
-  /(ticket|token|reference|\bref\.?|complaint|grievance)\s*(no|number|num|id)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{3,})/i;
+  /(ticket|token|reference|\bref\.?|complaint|grievance)\s*(no|number|num|id)?\s*[:#-]?\s*([A-Z0-9-]*\d[A-Z0-9-]{2,})/i;
 const BARE_REF = /^[A-Z0-9][A-Z0-9-]{5,}$/;
 
 /** Pull a ticket/reference number out of a proof message, if there is one. */
