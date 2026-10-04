@@ -13,6 +13,13 @@ import {
 } from "@/state/stateReducer";
 import { runTurn } from "@/agent/turnRunner";
 import { extractFacts, onlyEmpty } from "@/agent/extractFacts";
+import {
+  buildEnglishSummary,
+  isCodeGloss,
+  isLegacyGloss,
+  pickGlossInputs,
+  sameGlossInputs,
+} from "@/agent/summaryGloss";
 import { isExplicitCorrection } from "@/state/stateReducer";
 import { buildEmailDraft, gmailComposeUrl, missingDraftFields, type DraftFieldKey } from "@/agent/emailDraft";
 import { normaliseDate } from "@/agent/guardrails";
@@ -34,7 +41,6 @@ import { isSmallTalk, detectLanguage, type DetectedLang } from "@/agent/detect";
 /** True when no complaint fact has been captured yet. */
 function nothingCaptured(state: GrievanceState): boolean {
   return (
-    state.issueSummaryOriginal === null &&
     state.issueSummaryEnglish === null &&
     state.entityName === null &&
     state.entityType === null &&
@@ -106,8 +112,8 @@ function offlineLineFor(det: DetectedLang): string {
   if (det.latin && OFFLINE_LATN[det.base]) return OFFLINE_LATN[det.base]!;
   return OFFLINE_LINES[det.base] ?? OFFLINE_LINES.en!;
 }
-import { createLLM, createSTT, createTTS } from "@/providers/registry";
-import type { LLMProvider, STTProvider, TTSProvider } from "@/providers/types";
+import { createLLM, createTTS } from "@/providers/registry";
+import type { LLMProvider, TTSProvider } from "@/providers/types";
 import { config } from "@/shared/config";
 import { truncateForSpeech } from "@/agent/guardrails";
 
@@ -132,7 +138,6 @@ export interface AgentController {
  */
 export class Conversation {
   private llm: LLMProvider;
-  private stt: STTProvider;
   private tts: TTSProvider;
   private listeners = new Set<(c: AgentController) => void>();
 
@@ -167,9 +172,8 @@ export class Conversation {
   private draftFinalize = false;
   private proofTries = 0;
 
-  constructor(deps?: Partial<{ llm: LLMProvider; stt: STTProvider; tts: TTSProvider }>) {
+  constructor(deps?: Partial<{ llm: LLMProvider; tts: TTSProvider }>) {
     this.llm = deps?.llm ?? createLLM();
-    this.stt = deps?.stt ?? createSTT();
     this.tts = deps?.tts ?? createTTS();
   }
 
@@ -253,6 +257,9 @@ export class Conversation {
     }
 
     try {
+      // Snapshot the gloss ingredients before anything merges, so the
+      // English summary can be refreshed below if they moved.
+      const glossBefore = pickGlossInputs(this.state);
       // Deterministic extraction FIRST (spec A.4): stated facts enter state
       // even if the model under-reports them — or if the model is
       // unreachable this turn. Only empty fields (plus explicit corrections)
@@ -356,6 +363,23 @@ export class Conversation {
         this.state = { ...this.state, priorContactConfirmed: true };
       }
 
+      // Refresh the code-written English summary when its ingredients
+      // arrived this turn (seen live: the amount landed after the gloss had
+      // frozen as "regarding against"). Only touches code-generated text; a
+      // model-written summary is never overwritten here.
+      const glossNow = pickGlossInputs(this.state);
+      if (
+        this.state.issueSummaryEnglish &&
+        isCodeGloss(this.state.issueSummaryEnglish) &&
+        (!sameGlossInputs(glossBefore, glossNow) ||
+          isLegacyGloss(this.state.issueSummaryEnglish))
+      ) {
+        const rebuilt = buildEnglishSummary(glossNow);
+        if (rebuilt !== this.state.issueSummaryEnglish) {
+          this.state = mergeState(this.state, { issueSummaryEnglish: rebuilt });
+        }
+      }
+
       // Agreement override: the draft must never depend solely on the model's
       // action field. Seen live: the reply said "here is the email draft"
       // while nextAction stayed "none" (or was phase-suppressed), so no card
@@ -418,12 +442,6 @@ export class Conversation {
         role: "agent",
         text: turn.reply,
         at: new Date().toISOString(),
-        english:
-          turn.reply !== this.state.issueSummaryOriginal &&
-          this.state.issueSummaryOriginal &&
-          /[ऀ-ॿఀ-౿஀-௿]/.test(turn.reply)
-            ? this.state.issueSummaryEnglish ?? undefined
-            : undefined,
         // The draft is built by code from the confirmed state, never by the
         // model, so every required part is always present. Never sent.
         emailDraft: turn.nextAction === "draft_email" ? buildEmailDraft(this.state) : undefined,
@@ -1086,11 +1104,6 @@ export class Conversation {
       /* nothing to clear */
     }
     this.emit();
-  }
-
-  async transcribe(audio: Blob, langHint?: string): Promise<string> {
-    const { text } = await this.stt.transcribe(audio, langHint);
-    return text;
   }
 
   private async speak(text: string): Promise<void> {

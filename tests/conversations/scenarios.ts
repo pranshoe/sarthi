@@ -268,7 +268,6 @@ export const SCENARIOS: Scenario[] = [
       conv.state = {
         ...conv.state,
         issueSummaryEnglish: "Funds stuck.",
-        issueSummaryOriginal: "Funds stuck.",
         entityName: "Zerodha",
         amountInvolved: 40000,
         priorContactDate: "2026-09-05",

@@ -84,7 +84,6 @@ describe.skipIf(!LIVE)("live proxy + Gemini", () => {
       history.push(line);
       const u = turn!.stateUpdates;
       if (u.issueSummaryEnglish) state.issueSummaryEnglish = u.issueSummaryEnglish;
-      if (u.issueSummaryOriginal) state.issueSummaryOriginal = u.issueSummaryOriginal;
       if (u.entityName) state.entityName = u.entityName;
       if (u.clientIdFolioNoDpid) state.clientIdFolioNoDpid = u.clientIdFolioNoDpid;
       if (u.incidentDate) state.incidentDate = u.incidentDate;
@@ -103,7 +102,9 @@ describe.skipIf(!LIVE)("live proxy + Gemini", () => {
     // State should have picked up entity, date and the story by the end.
     expect(state.entityName).toBeTruthy();
     expect(state.issueSummaryEnglish).toBeTruthy();
-    expect(detectLanguage(state.issueSummaryOriginal ?? "").base).toBeTruthy();
+    // State stays English: the portal summary must detect as English even
+    // when the user wrote in Tamil.
+    expect(detectLanguage(state.issueSummaryEnglish ?? "").base).toBe("en");
     // Regression: a bare "3rd March" must resolve to this year's March, never
     // to an invented year like 2024/2025. Today is inside todayISO().
     expect(state.incidentDate).toBe(`${todayISO().slice(0, 4)}-03-03`);

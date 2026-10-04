@@ -4,6 +4,7 @@ import { detectLanguage, isSmallTalk, type DetectedLang } from "@/agent/detect";
 import { findDateInText } from "@/state/dates";
 import { SCORES_RULES } from "@/data/scoresRules";
 import { inferCategory } from "@/portal/categories";
+import { buildEnglishSummary, extractSoldDescription } from "@/agent/summaryGloss";
 import {
   BARE_DENIAL,
   CONTACT_CLAIM,
@@ -395,6 +396,7 @@ interface Extracted {
   incidentDate?: string;
   category?: string;
   relief?: string;
+  sold?: string;
   entityType?: string;
   rejected?: boolean;
 }
@@ -435,6 +437,9 @@ function extract(text: string): Extracted {
   else if (/rta|registrar|transfer agent/i.test(t)) out.entityType = "RTA";
 
   if (/reject|refus|mana kar|tiraskal|ತಿರಸಿ|refused/i.test(t)) out.rejected = true;
+
+  const sold = extractSoldDescription(t);
+  if (sold) out.sold = sold;
 
   return out;
 }
@@ -849,6 +854,7 @@ export class MockLLMProvider implements LLMProvider {
       updates.entityType = got.entityType;
     }
     if (got.relief) updates.reliefSought = got.relief;
+    if (got.sold) updates.soldDescription = got.sold;
 
     // Contact claim without a date: record the claim, ask the date.
     // (A date in the message is extracted above and handled with proof next.)
@@ -883,8 +889,13 @@ export class MockLLMProvider implements LLMProvider {
     // A short reply that extracted something is a correction, not a new story.
     const isCorrection = CORRECTION.test(bare);
     if (!isCorrection && bare.length > 14 && !state.issueSummaryEnglish && !(contactMeta && !hasFacts)) {
-      updates.issueSummaryOriginal = bare;
-      updates.issueSummaryEnglish = englishGloss(bare, got);
+      updates.issueSummaryEnglish = buildEnglishSummary({
+        entityName: got.entityName,
+        amountInvolved: got.amountInvolved,
+        incidentDate: got.incidentDate,
+        soldDescription: got.sold,
+        reliefSought: got.relief,
+      });
     }
 
     // 4. User says they cannot provide something. Explain it, then move on.
@@ -1057,14 +1068,4 @@ function parseKnownFromInstructions(instructions: string): GrievanceState {
 function parsePhase(instructions: string): string {
   return instructions.match(/CURRENT PHASE:\s*(\w+)/)?.[1] ?? "INTAKE";
 }
-
-/** Simple gloss. The live model produces both summaries properly in one call. */
-function englishGloss(text: string, got: Extracted): string {
-  const who = got.entityName ?? "the broker/company";
-  const money = got.amountInvolved ? `INR ${got.amountInvolved.toLocaleString("en-IN")} ` : "";
-  const when = got.incidentDate ? `, on or around ${got.incidentDate}` : "";
-  return (
-    `Investor complaint regarding ${money}against ${who}${when}. ` +
-    `The investor's own description: "${text}"`
-  );
-}
+

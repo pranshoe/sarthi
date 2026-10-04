@@ -13,7 +13,7 @@ import { config } from "@/shared/config";
 
 chrome.runtime.onInstalled.addListener(() => {
   // Chrome: clicking the toolbar icon opens the side panel and it stays open,
-  // which matters because a popup closes on blur and would kill the microphone.
+  // which matters because a popup closes on blur and loses the conversation.
   if (chrome.sidePanel?.setPanelBehavior) {
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   }
@@ -80,23 +80,6 @@ async function handle(msg: WorkerRequest, sender: chrome.runtime.MessageSender):
       // "to" may be empty on purpose when the broker has no verified address.
       await chrome.tabs.create({ url: gmailComposeUrl(msg.payload.to, msg.payload.subject, msg.payload.body) });
       return { ok: true };
-    }
-
-    case "stt/transcribe": {
-      const { audio, langHint } = msg.payload;
-      const blob = new Blob([audio], { type: "audio/webm" });
-      const fd = new FormData();
-      fd.append("file", blob, "clip.webm");
-      fd.append("model", "saaras:v4");
-      fd.append("mode", "transcribe");
-      fd.append("language_code", langHint && langHint !== "auto" ? langHint : "unknown");
-
-      const res = await callProxy("/speech/stt", { method: "POST", body: fd });
-      const body = (await res.json()) as { text?: string; detectedLang?: string; error?: string };
-      if (!res.ok) {
-        return { ok: false, error: body.error ?? `stt ${res.status}`, detail: JSON.stringify(body) };
-      }
-      return { ok: true, text: body.text ?? "", detectedLang: body.detectedLang ?? "unknown" };
     }
 
     case "tts/speak": {

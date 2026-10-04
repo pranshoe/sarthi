@@ -124,6 +124,16 @@ export function missingDraftFields(state: {
   return out;
 }
 
+/** Human labels for the still-missing placeholders, shown on the draft card. */
+export const DRAFT_FIELD_LABELS: Record<DraftFieldKey, string> = {
+  clientId: "Client ID / UCC",
+  amount: "Amount in rupees",
+  incidentDate: "Incident date",
+  soldDescription: "What was bought or sold",
+  userName: "Your full name",
+  userPhone: "Mobile number",
+};
+
 /** True when the built draft contains no [...] placeholders. */
 export function isSendReady(draft: { bodyEn: string; subject: string }): boolean {
   return !/\[.+?\]/.test(draft.bodyEn) && !/\[.+?\]/.test(draft.subject);

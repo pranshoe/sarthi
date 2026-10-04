@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatTurn, EmailDraft, GrievanceState } from "@/shared/types";
 import { EmailDraftCard } from "./EmailDraftCard";
 import { ReviewCard } from "./ReviewCard";
+import { missingDraftFields } from "@/agent/emailDraft";
 
 /**
  * Chat transcript. No language picker here on purpose: the agent mirrors the
@@ -11,8 +12,6 @@ export function Chat({
   history,
   busy,
   onSend,
-  onMic,
-  recording,
   onOpenGmail,
   onEmailSent,
   gmailFailed,
@@ -23,8 +22,6 @@ export function Chat({
   history: ChatTurn[];
   busy: boolean;
   onSend: (t: string) => void;
-  onMic: () => void;
-  recording: boolean;
   onOpenGmail: (d: EmailDraft) => void;
   onEmailSent: () => void;
   gmailFailed: boolean;
@@ -64,14 +61,10 @@ export function Chat({
               }
             >
               <span className="whitespace-pre-wrap break-words">{t.text}</span>
-              {t.english && t.english !== t.text && (
-                <span className="mt-2 block border-t border-dashed border-slate-300 pt-2 text-[13px] text-slate-500">
-                  EN: {t.english}
-                </span>
-              )}
               {t.emailDraft && (
                 <EmailDraftCard
                   draft={t.emailDraft}
+                  missing={missingDraftFields(reviewState)}
                   gmailFailed={gmailFailed}
                   onOpenGmail={onOpenGmail}
                   onSent={onEmailSent}
@@ -106,18 +99,6 @@ export function Chat({
 
       <div className="border-t border-slate-200 bg-white px-3 py-3">
         <div className="flex items-end gap-2">
-          <button
-            onClick={onMic}
-            aria-label={recording ? "Stop recording" : "Speak"}
-            title={recording ? "Stop" : "Speak (Chrome only)"}
-            className={
-              recording
-                ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"
-                : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-lg hover:bg-slate-50"
-            }
-          >
-            {recording ? "■" : "🎤"}
-          </button>
           <textarea
             ref={textRef}
             rows={1}

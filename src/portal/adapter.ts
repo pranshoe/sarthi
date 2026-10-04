@@ -202,7 +202,7 @@ export function adapterFor(hostname: string): PortalAdapter | null {
 /** The English text that goes into a portal textarea. */
 export function buildComplaintBody(state: GrievanceState): string {
   const lines: string[] = [];
-  lines.push(state.issueSummaryEnglish ?? state.issueSummaryOriginal ?? "");
+  lines.push(state.issueSummaryEnglish ?? "");
 
   const facts: string[] = [];
   if (state.entityName) facts.push(`Entity: ${state.entityName}`);

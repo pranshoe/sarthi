@@ -41,7 +41,6 @@ export function mergeState(
     "entityName",
     "clientIdFolioNoDpid",
     "issueSummaryEnglish",
-    "issueSummaryOriginal",
     "reliefSought",
     "userName",
     "userPhone",
@@ -103,6 +102,17 @@ export function mergeState(
 
   if (updates.priorContactProof !== undefined && updates.priorContactProof !== null) {
     next.priorContactProof = updates.priorContactProof;
+  }
+
+  // A recorded contact date IS a contact claim: if neither the current state
+  // nor this update takes an explicit position, default to emailed. Without
+  // this, a model-reported date lands with proof null — the review card then
+  // shows the date while the gate still reports it missing (seen live), and
+  // confirming changes nothing. Explicit positions ("none", "rejected",
+  // "emailed") are never overridden. This also heals already-stuck states,
+  // since merge runs on every turn.
+  if (next.priorContactDate && next.priorContactProof == null) {
+    next.priorContactProof = "emailed";
   }
 
   // Code-owned flags. Silently dropped if a model ever sends them.
@@ -340,7 +350,7 @@ export function knownView(state: GrievanceState): Record<string, unknown> {
     entityName: state.entityName,
     entityType: state.entityType,
     clientIdFolioNoDpid: state.clientIdFolioNoDpid,
-    issueSummary: state.issueSummaryOriginal,
+    issueSummary: state.issueSummaryEnglish,
     incidentDate: state.incidentDate,
     amountInvolved: state.amountInvolved,
     reliefSought: state.reliefSought,

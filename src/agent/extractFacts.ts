@@ -1,4 +1,5 @@
 import { inferCategory } from "@/portal/categories";
+import { buildEnglishSummary, extractSoldDescription } from "./summaryGloss";
 import { findDateInText } from "@/state/dates";
 import { isSmallTalk } from "@/agent/detect";
 import {
@@ -44,7 +45,6 @@ export type FactUpdates = Partial<
     | "complaintCategory"
     | "reliefSought"
     | "issueSummaryEnglish"
-    | "issueSummaryOriginal"
     | "soldDescription"
   >
 >;
@@ -79,18 +79,14 @@ function titleCase(s: string): string {
     .join(" ");
 }
 
-/** Same gloss shape the mock uses, so live + mock states look alike. */
-function englishGloss(
-  text: string,
-  got: { entityName?: string | null; amountInvolved?: number | null; incidentDate?: string | null },
-): string {
-  const who = got.entityName ?? "the broker/company";
-  const money = got.amountInvolved ? `INR ${got.amountInvolved.toLocaleString("en-IN")} ` : "";
-  const when = got.incidentDate ? `, on or around ${got.incidentDate}` : "";
-  return (
-    `Investor complaint regarding ${money}against ${who}${when}. ` +
-    `The investor's own description: "${text}"`
-  );
+/** Thin wrapper so the call site reads naturally; shape lives in summaryGloss. */
+function englishGloss(got: {
+  entityName?: string | null;
+  amountInvolved?: number | null;
+  incidentDate?: string | null;
+  soldDescription?: string | null;
+}): string {
+  return buildEnglishSummary(got);
 }
 
 export function extractFacts(
@@ -143,6 +139,12 @@ export function extractFacts(
   const ucc = t.match(UCC);
   if (ucc?.[1]) out.clientIdFolioNoDpid = ucc[1].toUpperCase();
 
+  // What was bought or sold, stated outright ("sold 50 Infosys shares",
+  // "50 Infosys share becha tha"). Without this the email keeps asking for
+  // something the user already said.
+  const sold = extractSoldDescription(t);
+  if (sold) out.soldDescription = sold;
+
   // Summaries are generated, never requested. A short correction that
   // extracted something ("Actually it was 25,000") refines a field, it is
   // not a new story — but this layer only fills empties anyway, so the
@@ -150,7 +152,12 @@ export function extractFacts(
   // Neutral chatter with no complaint signal ("nice weather") files nothing.
   const contactMeta = CONTACT_TALK.test(t);
   const hasFacts =
-    out.entityName || out.amountInvolved || out.incidentDate || out.complaintCategory || out.clientIdFolioNoDpid;
+    out.entityName ||
+    out.amountInvolved ||
+    out.incidentDate ||
+    out.complaintCategory ||
+    out.clientIdFolioNoDpid ||
+    out.soldDescription;
   const hasSignal =
     !!hasFacts ||
     /money|rupees?|paisa|refund|broker|shares?|account|demat|dividend|complaint|grievance|fraud|unauthori|credit|debit|transfer|invest|folio|ticket|proceeds/i.test(
@@ -163,11 +170,11 @@ export function extractFacts(
     !(contactMeta && !hasFacts) &&
     /[a-zA-Z\u0900-\u097F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF]/.test(t)
   ) {
-    out.issueSummaryOriginal = t;
-    out.issueSummaryEnglish = englishGloss(t, {
+    out.issueSummaryEnglish = englishGloss({
       entityName: out.entityName,
       amountInvolved: out.amountInvolved,
       incidentDate: out.incidentDate,
+      soldDescription: out.soldDescription,
     });
   }
 

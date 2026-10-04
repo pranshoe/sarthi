@@ -11,16 +11,6 @@ export interface LLMProvider {
   chat(messages: ChatMessage[], opts?: { jsonSchema?: unknown }): Promise<string>;
 }
 
-export interface STTResult {
-  text: string;
-  detectedLang: string;
-}
-
-export interface STTProvider {
-  readonly id: string;
-  transcribe(audio: Blob, langHint?: string): Promise<STTResult>;
-}
-
 export interface TTSProvider {
   readonly id: string;
   /** Returns playable audio bytes. */
@@ -32,7 +22,6 @@ export interface CostLedger {
   llmCalls: number;
   llmPromptTokens: number;
   llmCompletionTokens: number;
-  sttSeconds: number;
   ttsChars: number;
 }
 
@@ -40,7 +29,6 @@ export const ledger: CostLedger = {
   llmCalls: 0,
   llmPromptTokens: 0,
   llmCompletionTokens: 0,
-  sttSeconds: 0,
   ttsChars: 0,
 };
 
@@ -49,7 +37,6 @@ export function logCost(label: string, detail: Record<string, unknown>): void {
   const estSarvam =
     (ledger.llmPromptTokens / 1_000_000) * 29.28 +
     (ledger.llmCompletionTokens / 1_000_000) * 73.2 +
-    (ledger.sttSeconds / 3600) * 30 +
     (ledger.ttsChars / 10_000) * 30;
 
   console.info(

@@ -42,18 +42,16 @@ const GEMINI_KEY = env.GEMINI_API_KEY ?? "";
 const PORT = Number(env.PORT ?? 8787);
 
 /**
- * Hard spend guard. Sarvam STT is ~INR 30/hour and TTS ~INR 30 per 10k chars,
+ * Hard spend guard. Sarvam TTS is ~INR 30 per 10k chars,
  * so a runaway loop could otherwise drain the balance during a live demo.
  */
 const SPEND_CAP_INR = Number(env.SPEND_CAP_INR ?? 100);
-const STT_RATE_PER_HOUR = 30;
 const TTS_RATE_PER_10K_CHARS = 30;
 
-const spent = { sttSeconds: 0, ttsChars: 0, sarvamLlmIn: 0, sarvamLlmOut: 0 };
+const spent = { ttsChars: 0, sarvamLlmIn: 0, sarvamLlmOut: 0 };
 
 function estimateSpendINR(): number {
   return (
-    (spent.sttSeconds / 3600) * STT_RATE_PER_HOUR +
     (spent.ttsChars / 10_000) * TTS_RATE_PER_10K_CHARS +
     (spent.sarvamLlmIn / 1_000_000) * 29.28 +
     (spent.sarvamLlmOut / 1_000_000) * 73.2
@@ -84,7 +82,7 @@ function readBody(req: http.IncomingMessage): Promise<Buffer> {
     let size = 0;
     req.on("data", (c: Buffer) => {
       size += c.length;
-      // 25 MB ceiling: enough for a few minutes of webm audio.
+      // 25 MB ceiling against runaway or abusive payloads.
       if (size > 25 * 1024 * 1024) {
         reject(new Error("payload too large"));
         req.destroy();
@@ -97,51 +95,7 @@ function readBody(req: http.IncomingMessage): Promise<Buffer> {
   });
 }
 
-/** Crude but effective: never log anything that could carry PII. */
-function mask(text: string): string {
-  return text
-    .replace(/\b[A-Z]{5}\d{4}[A-Z]\b/gi, "PAN")
-    .replace(/\b\d{4}\s?\d{4}\s?\d{4}\b/g, "AADHAAR")
-    .replace(/\b\d{9,}\b/g, "NUM")
-    .slice(0, 120);
-}
-
 // ---- routes ----
-
-async function handleStt(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  if (!SARVAM_KEY) return json(res, 503, { error: "SARVAM_API_KEY not set in proxy/.env" });
-  if (overCap()) return json(res, 429, { error: "spend cap reached", spent: estimateSpendINR() });
-
-  const body = await readBody(req);
-  // Forward the multipart bytes exactly. Buffer.from copies into a fresh
-  // allocation, so pooled bytes can never leak into the upstream request.
-  const bytes = Buffer.from(body);
-  const upstream = await fetch("https://api.sarvam.ai/speech-to-text", {
-    method: "POST",
-    headers: {
-      "api-subscription-key": SARVAM_KEY,
-      "Content-Type": req.headers["content-type"] ?? "multipart/form-data",
-    },
-    body: bytes as unknown as BodyInit,
-  });
-
-  const text = await upstream.text();
-  if (!upstream.ok) {
-    console.error(`[proxy] stt ${upstream.status}: ${text.slice(0, 200)}`);
-    return json(res, upstream.status, { error: "stt failed", detail: text.slice(0, 300) });
-  }
-
-  const parsed = JSON.parse(text) as { transcript?: string; text?: string };
-  spent.sttSeconds += 5; // conservative flat estimate per clip
-  console.log(`[proxy] stt ok, ~${mask(parsed.transcript ?? parsed.text ?? "")}`);
-
-  return json(res, 200, {
-    text: parsed.transcript ?? parsed.text ?? "",
-    // Language detection is done client-side by design; we echo the hint.
-    detectedLang: "unknown",
-    spentINR: Number(estimateSpendINR().toFixed(3)),
-  });
-}
 
 async function handleTts(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!SARVAM_KEY) return json(res, 503, { error: "SARVAM_API_KEY not set in proxy/.env" });
@@ -277,7 +231,6 @@ const server = http.createServer((req, res) => {
   }
 
   const routes: Record<string, (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>> = {
-    "/speech/stt": handleStt,
     "/speech/tts": handleTts,
     "/sarvam/v1/chat/completions": handleSarvamLlm,
     "/llm/chat": handleGemini,

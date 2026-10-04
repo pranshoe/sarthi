@@ -57,7 +57,6 @@ function tinyPdfDataUrl(): string {
 
 const STATE = {
   issueSummaryEnglish: "Sale proceeds of INR 40000 not credited by the broker.",
-  issueSummaryOriginal: "Sale proceeds of INR 40000 not credited by the broker.",
   entityName: "Zerodha",
   entityType: "broker",
   complaintCategory: "Non-receipt of funds",

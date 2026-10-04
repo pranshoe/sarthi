@@ -1,8 +1,8 @@
-import type { LLMProvider, STTProvider, TTSProvider } from "./types";
+import type { LLMProvider, TTSProvider } from "./types";
 import { MockLLMProvider } from "./llm/mockLlm";
 import { GeminiLLMProvider } from "./llm/gemini";
 import { ClaudeLLMProvider, OpenAICompatProvider } from "./llm/openaiCompat";
-import { MockSTTProvider, MockTTSProvider, SarvamSTTProvider, SarvamTTSProvider } from "./stt/sarvamStt";
+import { MockTTSProvider, SarvamTTSProvider } from "./tts/sarvamTts";
 import { config } from "@/shared/config";
 
 /**
@@ -45,11 +45,6 @@ export function createLLM(): LLMProvider {
     default:
       return new MockLLMProvider();
   }
-}
-
-export function createSTT(): STTProvider {
-  if (config.mockMode) return new MockSTTProvider();
-  return new SarvamSTTProvider();
 }
 
 export function createTTS(): TTSProvider {

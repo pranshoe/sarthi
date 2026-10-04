@@ -1,5 +1,4 @@
 import { Conversation } from "@/sidepanel/conversation";
-import { MockSTTProvider } from "@/providers/stt/sarvamStt";
 import { GeminiLLMProvider } from "@/providers/llm/gemini";
 import type { ChatMessage, LLMProvider } from "@/providers/types";
 import { detectLanguage } from "@/agent/detect";
@@ -164,7 +163,7 @@ export async function runScenario(
       : new RecordedLLM(loadFixture(scenario.id, runIndex));
   const llm = new CountingLLM(inner, mode === "live" ? recorded : undefined);
 
-  const conv = new Conversation({ llm, stt: new MockSTTProvider() });
+  const conv = new Conversation({ llm });
   // Panel-open state: the real extension calls start() on open, which sets
   // this. The harness drives send() directly, so set it here — otherwise the
   // phase machine sits in GREETING forever and review/autofill actions that

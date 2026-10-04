@@ -36,8 +36,6 @@ export interface GrievanceState {
   clientIdFolioNoDpid: string | null;
   /** English summary used for the government portal. */
   issueSummaryEnglish: string | null;
-  /** Summary in the user's own language, shown back to them. */
-  issueSummaryOriginal: string | null;
   incidentDate: string | null; // ISO yyyy-mm-dd
   amountInvolved: number | null;
   priorContactDate: string | null; // ISO yyyy-mm-dd
@@ -119,8 +117,6 @@ export interface ChatTurn {
   role: "user" | "agent" | "system";
   text: string;
   at: string;
-  /** Optional English gloss shown under an Indic reply. */
-  english?: string;
   synthetic?: boolean;
   /** Present when this turn produced a broker-email draft. */
   emailDraft?: EmailDraft;
@@ -152,7 +148,6 @@ export interface LLMTurnResult {
 
 export interface ProviderConfig {
   llm: "mock" | "gemini" | "claude" | "openai" | "sarvam";
-  stt: "mock" | "sarvam";
   tts: "mock" | "sarvam";
   /** When true, no network calls are made at all. */
   mockMode: boolean;
@@ -172,7 +167,6 @@ export interface TurnRequest {
 
 export type WorkerRequest =
   | { type: "llm/turn"; payload: TurnRequest }
-  | { type: "stt/transcribe"; payload: { audio: ArrayBuffer; langHint?: string; mockMode: boolean } }
   | { type: "tts/speak"; payload: { text: string; lang: string; mockMode: boolean } }
   | { type: "panel/open"; payload: Record<string, never> }
   | { type: "gmail/open"; payload: { to: string; subject: string; body: string } }

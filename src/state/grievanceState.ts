@@ -6,7 +6,6 @@ export const emptyState = (): GrievanceState => ({
   entityType: null,
   clientIdFolioNoDpid: null,
   issueSummaryEnglish: null,
-  issueSummaryOriginal: null,
   incidentDate: null,
   amountInvolved: null,
   priorContactDate: null,

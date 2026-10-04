@@ -3,7 +3,6 @@ import { Conversation, type AgentController } from "./conversation";
 import { Chat } from "./Chat";
 import { UnderstoodCard } from "./UnderstoodCard";
 import { ReviewChecklist } from "./ReviewChecklist";
-import { useMic } from "./MicButton";
 import { config } from "@/shared/config";
 import type { Attachment, EmailDraft, FillReport } from "@/shared/types";
 
@@ -37,8 +36,6 @@ export function App() {
     }
     return unsub;
   }, [conv]);
-
-  const mic = useMic((text) => void conv.send(text));
 
   /** Compose tab only. We never touch Gmail's DOM and never send anything. */
   async function openGmail(draft: EmailDraft) {
@@ -91,7 +88,7 @@ export function App() {
   // "not captured yet" is noise, not progress.
   const s = snap.state;
   const anythingCaptured =
-    s.issueSummaryOriginal !== null ||
+    s.issueSummaryEnglish !== null ||
     s.entityName !== null ||
     s.entityType !== null ||
     s.complaintCategory !== null ||
@@ -191,8 +188,6 @@ export function App() {
             history={snap.history}
             busy={snap.busy}
             onSend={(t) => void conv.send(t)}
-            onMic={mic.toggle}
-            recording={mic.recording}
             onOpenGmail={(d) => void openGmail(d)}
             onEmailSent={() => conv.confirmEmailSent()}
             gmailFailed={snap.gmailFailed}
@@ -223,11 +218,6 @@ export function App() {
 )}
               </pre>
             </details>
-          )}
-          {mic.note && (
-            <div className="bg-slate-100 px-3 py-1.5 text-center text-[11.5px] text-slate-600">
-              {mic.note}
-            </div>
           )}
         </>
       ) : (

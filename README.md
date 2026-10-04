@@ -27,11 +27,11 @@ calls `http://127.0.0.1:8787`.
 
 ```
 side panel (React)          conversation.ts      turnRunner.ts
-  Chat / MicButton              │                      │
+  Chat                          │                      │
   UnderstoodCard                │            ┌─────────┴─────────┐
   ReviewChecklist               │            │                   │
-        │                       │      LLMProvider        STT/TTSProvider
-        │  chrome.runtime       │      Gemini (live)     Sarvam Saaras/Bulbul
+        │                       │      LLMProvider        TTSProvider
+        │  chrome.runtime       │      Gemini (live)     Bulbul (spoken replies)
         ▼                       │      Mock  (free)      Mock    (free)
   background/index.ts  ─────────┘           registry.ts
         │                                    swaps by config
@@ -48,8 +48,8 @@ State is split deliberately: the LLM sees `knownView(state)` plus a computed
 ## Provider setup
 
 Conversation is **Gemini** (free tier, the most reliable for schema-constrained
-JSON). Speech is **Sarvam** (Saaras v4 STT, Bulbul v3 TTS) because it is built for
-Indian languages. Sarvam translation is deliberately unused — the LLM emits both
+JSON). Spoken replies are **Sarvam** Bulbul v3 TTS because it is built for
+Indian languages. There is no voice input; users type. Sarvam translation is deliberately unused — the LLM emits both
 the English and the user's-language summary in one call.
 
 Swap the conversation model by changing `VITE_LLM_PROVIDER`. Agent code does not
@@ -59,7 +59,6 @@ Verified Sarvam endpoint shapes (docs.sarvam.ai, Oct 2026):
 
 | Purpose | Endpoint | Model | Auth |
 |---|---|---|---|
-| STT | `POST /speech-to-text` (multipart) | `saaras:v4`, `mode=transcribe` | `api-subscription-key` |
 | TTS | `POST /text-to-speech` → `{audios: string[]}` | `bulbul:v3` | `api-subscription-key` |
 | Chat | `POST /v1/chat/completions` | `sarvam-30b` / `sarvam-105b` | header or Bearer |
 
@@ -127,7 +126,6 @@ without the live SEBI site.
 |---|---|
 | Dev and tests | `VITE_MOCK_MODE=true`, all providers mocked |
 | LLM | Gemini free tier; compact state, last 4 turns, older summarised |
-| STT | ~INR 30/hour — cheap, demo the microphone freely |
 | TTS | ~INR 30 per 10k chars — off by default, cached by text hash |
 | Guard | `SPEND_CAP_INR` in the proxy refuses requests past the cap |
 
@@ -158,8 +156,7 @@ Per-turn token and cost estimates log to the dev console.
 
 ## Known limitations
 
-- **Voice input needs Chrome.** Firefox has no `SpeechRecognition`; it falls back
-  to typing. `MediaRecorder` → Sarvam works in both.
+- **No voice input.** Users type; spoken replies (Sarvam Bulbul v3, opt-in) are output only.
 - **Live portal selectors are unverified.** `src/portal/adapter.ts` uses
   heuristic selectors. Inspect the real SCORES complaint form and replace them;
   the mock replica is built against the same config so it stays honest.

@@ -1,4 +1,5 @@
 import type { EmailDraft } from "@/shared/types";
+import { DRAFT_FIELD_LABELS, type DraftFieldKey } from "@/agent/emailDraft";
 
 /**
  * The pre-flight broker email, shown in chat next to the agent's message.
@@ -8,11 +9,14 @@ import type { EmailDraft } from "@/shared/types";
  */
 export function EmailDraftCard({
   draft,
+  missing,
   gmailFailed,
   onOpenGmail,
   onSent,
 }: {
   draft: EmailDraft;
+  /** Placeholders still in the draft, from live state. Empty when send-ready. */
+  missing?: DraftFieldKey[];
   gmailFailed: boolean;
   onOpenGmail: (d: EmailDraft) => void;
   onSent: () => void;
@@ -52,6 +56,12 @@ export function EmailDraftCard({
           I could not verify this broker&apos;s grievance email, so the To field is
           empty on purpose — I never guess addresses. Please check it on the
           broker&apos;s website before sending.
+        </p>
+      )}
+      {missing && missing.length > 0 && (
+        <p className="mt-2 rounded-lg bg-white p-2 text-[12px] text-amber-800">
+          Still needed before sending: {missing.map((k) => DRAFT_FIELD_LABELS[k]).join(", ")} —
+          just reply here and I&apos;ll fill them in.
         </p>
       )}
 

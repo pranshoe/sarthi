@@ -19,7 +19,6 @@ export const turnSchema = z.object({
       entityType: entityType.optional(),
       clientIdFolioNoDpid: z.string().nullable().optional(),
       issueSummaryEnglish: z.string().nullable().optional(),
-      issueSummaryOriginal: z.string().nullable().optional(),
       incidentDate: z
         .string()
         .nullable()

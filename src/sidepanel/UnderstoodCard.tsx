@@ -45,22 +45,12 @@ export function UnderstoodCard({
         ))}
       </dl>
 
-      {state.issueSummaryOriginal && (
+      {state.issueSummaryEnglish && (
         <div className="mt-3 border-t border-brand-100 pt-2">
-          <p className="mb-1 text-[11px] font-semibold text-slate-500">In your words</p>
-          <p className="text-[13px] leading-relaxed text-slate-700">
-            {state.issueSummaryOriginal}
+          <p className="mb-1 text-[11px] font-semibold text-slate-500">For the portal (English)</p>
+          <p className="text-[13px] leading-relaxed text-slate-600">
+            {state.issueSummaryEnglish}
           </p>
-          {state.issueSummaryEnglish && state.issueSummaryEnglish !== state.issueSummaryOriginal && (
-            <>
-              <p className="mb-1 mt-2 text-[11px] font-semibold text-slate-500">
-                For the portal (English)
-              </p>
-              <p className="text-[13px] leading-relaxed text-slate-600">
-                {state.issueSummaryEnglish}
-              </p>
-            </>
-          )}
         </div>
       )}
 

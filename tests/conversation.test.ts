@@ -1,7 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { Conversation } from "@/sidepanel/conversation";
 import { MockLLMProvider } from "@/providers/llm/mockLlm";
-import { MockSTTProvider } from "@/providers/stt/sarvamStt";
 import { emptyState } from "@/state/grievanceState";
 import { detectLanguage, isSmallTalk } from "@/agent/detect";
 import {
@@ -19,6 +18,9 @@ import { SCORES_RULES } from "@/data/scoresRules";
 import { findBrokerContact } from "@/data/brokers";
 import { runTurn } from "@/agent/turnRunner";
 import { computeDeadline, mergeState, partitionUpdates, resolveContradiction } from "@/state/stateReducer";
+import { extractFacts } from "@/agent/extractFacts";
+import { validateTurn } from "@/agent/guardrails";
+import { buildComplaintBody } from "@/portal/adapter";
 import { LIMIT_DAYS } from "@/state/phases";
 import { evaluateEscalation } from "@/state/phases";
 
@@ -30,7 +32,6 @@ import { evaluateEscalation } from "@/state/phases";
 function fresh() {
   return new Conversation({
     llm: new MockLLMProvider(),
-    stt: new MockSTTProvider(),
   });
 }
 
@@ -177,7 +178,6 @@ describe("SEBI rules and safety", () => {
     const complete = {
       ...emptyState(),
       issueSummaryEnglish: "Funds not credited",
-      issueSummaryOriginal: "à¤ªà¥ˆà¤¸à¤¾ à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾",
       entityName: "Zerodha",
       entityType: "broker" as const,
       complaintCategory: "Non-receipt of funds",
@@ -445,7 +445,6 @@ describe("greeting, repeats, empathy, email, rules, deadline", () => {
     conv.state = {
       ...emptyState(),
       issueSummaryEnglish: "Sale proceeds not credited.",
-      issueSummaryOriginal: "Sale proceeds not credited.",
       entityName: "Upstox",
       entityType: "broker",
       complaintCategory: "Non-receipt of funds",
@@ -555,7 +554,6 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
     const complete = {
       ...emptyState(),
       issueSummaryEnglish: "Funds not credited.",
-      issueSummaryOriginal: "Funds not credited.",
       entityName: "Zerodha",
       entityType: "broker" as const,
       complaintCategory: "Non-receipt of funds",
@@ -640,7 +638,6 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
       ...emptyState(),
       amountInvolved: 40000,
       issueSummaryEnglish: "Funds stuck.",
-      issueSummaryOriginal: "Funds stuck.",
       userLanguage: "en-IN",
     };
     await conv.send("it was 50000 rupees");
@@ -674,7 +671,6 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
     conv.state = {
       ...emptyState(),
       issueSummaryEnglish: "Funds stuck.",
-      issueSummaryOriginal: "Funds stuck.",
       entityName: "Zerodha",
       entityType: "broker",
       complaintCategory: "Non-receipt of funds",
@@ -704,7 +700,6 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Upstox",
         entityType: "broker",
         complaintCategory: "Non-receipt of funds",
@@ -738,7 +733,6 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
     conv.state = {
       ...emptyState(),
       issueSummaryEnglish: "Sale proceeds not credited.",
-      issueSummaryOriginal: "Sale proceeds not credited.",
       entityName: "Upstox",
       entityType: "broker",
       complaintCategory: "Non-receipt of funds",
@@ -779,7 +773,6 @@ describe("hard gates, contradictions, ask limits, email handshake", () => {
     conv2.state = {
       ...emptyState(),
       issueSummaryEnglish: "Something odd happened.",
-      issueSummaryOriginal: "Something odd happened.",
       entityName: "Zerodha",
       entityType: "broker",
       userLanguage: "en-IN",
@@ -871,7 +864,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         clientIdFolioNoDpid: "AB1234",
         amountInvolved: 40000,
@@ -904,7 +896,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         userLanguage: "en-IN",
       };
@@ -937,7 +928,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         entityType: "broker",
         complaintCategory: "Non-receipt of funds",
@@ -992,7 +982,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         entityType: "broker",
         complaintCategory: "Non-receipt of funds",
@@ -1032,7 +1021,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         userLanguage: "en-IN",
       };
@@ -1084,7 +1072,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         userLanguage: "en-IN",
       };
@@ -1132,7 +1119,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Upstox",
         entityType: "broker",
         complaintCategory: "Non-receipt of funds",
@@ -1166,7 +1152,6 @@ describe("draft agreement override: words must never promise what code withholds
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         clientIdFolioNoDpid: "AB1234",
         amountInvolved: 40000,
@@ -1261,7 +1246,6 @@ describe("agreement words: zaroor/bilkul count as yes (live transcript replay)",
       conv.state = {
         ...emptyState(),
         issueSummaryEnglish: "Sale proceeds not credited.",
-        issueSummaryOriginal: "Sale proceeds not credited.",
         entityName: "Zerodha",
         clientIdFolioNoDpid: "AB1234",
         amountInvolved: 100000,
@@ -1323,6 +1307,57 @@ describe("unverified rules: Hindi attributions are caught like English ones", ()
   });
 });
 
+describe("English-only state: no non-English text is ever stored", () => {
+  const HINDI_COMPLAINT = "Zerodha ne mere 40,000 rupaye ke sale proceeds 3 March se credit nahi kiye";
+
+  it("extractFacts writes an English one-liner with no quoted original", () => {
+    const out = extractFacts(HINDI_COMPLAINT, { emailFlow: "none", draftActive: false });
+    expect("issueSummaryOriginal" in out).toBe(false);
+    expect(out.issueSummaryEnglish).toBeTruthy();
+    expect(out.issueSummaryEnglish).not.toMatch(/own description/);
+    expect(out.issueSummaryEnglish).not.toMatch(/[\u0900-\u097F]/);
+    expect(out.issueSummaryEnglish).toMatch(/Zerodha/);
+    expect(out.issueSummaryEnglish).toMatch(/40,000/);
+  });
+
+  it("mock LLM stores English only, even for Hindi input", async () => {
+    const conv = fresh();
+    conv.hasGreeted = true;
+    await conv.send(HINDI_COMPLAINT);
+    expect(conv.state.issueSummaryEnglish).toBeTruthy();
+    expect(conv.state.issueSummaryEnglish).not.toMatch(/own description/);
+    expect(conv.state.issueSummaryEnglish).not.toMatch(/[\u0900-\u097F]/);
+    expect("issueSummaryOriginal" in conv.state).toBe(false);
+  });
+
+  it("validateTurn drops a stale issueSummaryOriginal instead of failing", () => {
+    const turn = validateTurn(
+      JSON.stringify({
+        detectedLanguage: "en-IN",
+        reply: "Noted.",
+        stateUpdates: { issueSummaryEnglish: "Funds stuck.", issueSummaryOriginal: "stale" },
+        phase: "INTAKE",
+        nextAction: "none",
+        confidence: {},
+      }),
+    );
+    expect(turn).toBeTruthy();
+    expect("issueSummaryOriginal" in (turn!.stateUpdates as object)).toBe(false);
+  });
+
+  it("buildComplaintBody is English even when the user wrote Hindi", () => {
+    const body = buildComplaintBody({
+      ...emptyState(),
+      issueSummaryEnglish: "Investor complaint regarding INR 40,000 against Zerodha, on or around 2026-03-03.",
+      entityName: "Zerodha",
+      incidentDate: "2026-03-03",
+      amountInvolved: 40000,
+    });
+    expect(body).not.toMatch(/[\u0900-\u097F]/);
+    expect(body).toMatch(/Zerodha/);
+  });
+});
+
 describe("memory", () => {
   it("clears everything on request", async () => {
     const conv = fresh();
@@ -1341,7 +1376,6 @@ describe("confirm continues: the ack is free, the flow moves", () => {
   const complete = () => ({
     ...emptyState(),
     issueSummaryEnglish: "Funds not credited",
-    issueSummaryOriginal: "Funds not credited",
     entityName: "Zerodha",
     entityType: "broker" as const,
     complaintCategory: "Non-receipt of funds",
@@ -1362,7 +1396,6 @@ describe("confirm continues: the ack is free, the flow moves", () => {
           throw new Error("model unreachable");
         },
       },
-      stt: new MockSTTProvider(),
     });
     conv.hasGreeted = true;
     conv.state = complete();
@@ -1406,7 +1439,6 @@ describe("confirm continues: the ack is free, the flow moves", () => {
             confidence: {},
           }),
       },
-      stt: new MockSTTProvider(),
     });
     conv.hasGreeted = true;
     conv.state = {
