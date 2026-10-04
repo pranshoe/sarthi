@@ -1,27 +1,23 @@
-# Sarthi — conversational grievance agent for SEBI SCORES & IEPF
+# Sarthi 🛡️
 
-A Manifest V3 Chrome extension. The user talks to Sarthi in their own language;
-Sarthi prepares the complaint and fills the government portal. The user always
-reviews, solves any CAPTCHA, and clicks Submit.
+**SEBI Track B — Investor Awareness, Rights & Grievance Redressal.**
 
-## The rules the code enforces
+Sarthi is a public-good platform that makes investor rights *usable* for
+first-time, Tier-2/3, and senior investors in India. It has three components,
+owned by three teams, that plug into one backend through a shared contract.
 
-**The LLM writes every message the user sees.** There is no scripted question
-list, no question order, and no per-field prompt string anywhere in
-`src/agent/`. Only `src/agent/systemPrompt.ts` describes what to ask.
+> ⚠️ Public-good only. No stock tips, no portfolio advice. Sarthi only helps
+> investors protect their rights and their family's inheritance.
 
-**Code decides what is allowed; the model decides what to say.**
-- `src/state/grievanceState.ts` — the single source of truth for what is missing
-- `src/state/stateReducer.ts` — merges model output, enforces phase order
-- `src/agent/guardrails.ts` — strips legal advice and outcome promises
-- `src/agent/turnRunner.ts` — suppresses an action the current phase forbids
+## The three repos
 
-**Two things it will never do** (spec §7): click Submit, touch a CAPTCHA.
-Enforced by `FORBIDDEN_SELECTORS` in `src/portal/adapter.ts`, checked on every
-field in `src/portal/fillEngine.ts`.
-
-**Keys never enter the bundle.** `proxy/server.ts` holds them; the extension
-calls `http://127.0.0.1:8787`.
+| Repo | What it is | Owner |
+|---|---|---|
+| [**sarthi-contracts**](https://github.com/Rigboat27/sarthi-contracts) | JSON Schemas + TS types + `config.json` — the single source of truth | Team C (architect) |
+| [**sarthi-engine**](https://github.com/Rigboat27/sarthi-engine) | FastAPI core backend @ `:8787` — speech, LLM, docs, AA mock, shared data | shared |
+| [**sarthi-portal**](https://github.com/Rigboat27/sarthi-portal) | Viraasat web app (Next.js) @ `:3000` — nominee audit, legal docs, IEPF pre-checker | Team C |
+| *sarthi-extension* (Team A) | Chrome MV3 "Saathi" grievance agent — talks to the engine | Team A |
+| *sarthi-mock-scores* (Team A) | Static SCORES/IEPF replicas @ `:8788` for demo | Team A |
 
 ## Architecture
 
@@ -42,18 +38,18 @@ content/detector.ts  ──►  portal/adapter.ts  ──►  fillEngine.ts
    sees SCORES/IEPF         field config          sets values, never submits
 ```
 
-State is split deliberately: the LLM sees `knownView(state)` plus a computed
-`missing[]` list, so it is told what it already knows and cannot re-ask for it.
+**Ports:** engine `8787` · portal `3000` · mock SCORES `8788`.
 
-## Provider setup
+**Keys never reach the browser.** The engine holds Sarvam + Gemini keys and
+proxies the vendors. Extension and portal only ever talk to `127.0.0.1:8787`.
 
 Conversation is **Gemini** (free tier, the most reliable for schema-constrained
 JSON). Spoken replies are **Sarvam** Bulbul v3 TTS because it is built for
 Indian languages. There is no voice input; users type. Sarvam translation is deliberately unused — the LLM emits both
 the English and the user's-language summary in one call.
 
-Swap the conversation model by changing `VITE_LLM_PROVIDER`. Agent code does not
-change.
+`sarthi-contracts` is the physical guarantee that the three codebases agree.
+Everything a component sends or receives is defined there once:
 
 Verified Sarvam endpoint shapes (docs.sarvam.ai, Oct 2026):
 
@@ -86,19 +82,57 @@ npm run build
 #    chrome://extensions -> Developer mode -> Load unpacked -> pick sarthi\dist
 ```
 
-### Mock mode (default, zero credits)
+Rules:
 
-`.env` ships with `VITE_MOCK_MODE=true`, so nothing hits the network:
+1. **Every** response is wrapped in the envelope:
+   `{ ok, data, meta:{tokens, costEstimateInr, mock}, error }`.
+2. A component **derives** its types from these files — extension/portal use the
+   TS types, the engine keeps Pydantic models in lockstep (`engine/app/models`).
+   Nobody redefines a shared field name locally.
+3. **Bump process** — to change a field:
+   1. edit `schemas/*.json` **and** `types/index.ts` in `sarthi-contracts`;
+   2. bump `config.json` `version`;
+   3. update the engine's Pydantic model;
+   4. bump the `contracts/` submodule (or run `npm run sync:contracts`) in each
+      consumer repo. Their typecheck breaks loudly if they lag — that's the point.
+4. **Runtime data is not a type.** SEBI rules + broker directory live only in the
+   engine (`app/data/*.json`) and are fetched at runtime via `/data/rules` and
+   `/data/brokers`, so a timeline fix lands in both extension and portal at once.
 
-```powershell
-copy .env.example .env
-npm run build
+## Cross-component data flows
+
+- **Grievance (extension → engine):** side panel → `/llm/chat` + `/speech/*` →
+  in-extension extraction → portal adapter autofills mock SCORES. The engine
+  proxies LLM/speech and serves `/data/rules` + `/data/brokers`.
+- **Wealth map (portal → engine → AA):** consent wizard → `/aa/consent` →
+  `/aa/verify` → `/aa/fetch` → nominee audit.
+- **Legal/IEPF (portal → engine):** upload → `/docs/ocr` → `/docs/match` →
+  `/docs/affidavit` → printable doc.
+
+## Run everything locally
+
+```bash
+# 1. clone (team repos live under your own org; these are the three public ones)
+git clone https://github.com/Rigboat27/sarthi-engine
+git clone https://github.com/Rigboat27/sarthi-portal
+git clone https://github.com/Rigboat27/sarthi-contracts
+
+# 2. engine (terminal 1)
+cd sarthi-engine
+python -m venv .venv && .venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+python run.py                                    # http://127.0.0.1:8787
+
+# 3. portal (terminal 2)
+cd sarthi-portal
+npm install
+NEXT_PUBLIC_MOCK_AA=false npm run dev            # http://localhost:3000
 ```
 
-The mock LLM answers in English, Hindi, Tamil and Kannada (native and
-romanized) so you can rehearse the demo with no spend at all.
+Everything defaults to **mock mode** — zero keys, zero spend. Set
+`MOCK_MODE=false` + keys in the engine's `.env` only when going live.
 
-### Going live
+## See also
 
 In `.env` set `VITE_MOCK_MODE=false`. Keep `VITE_SPOKEN_REPLIES=false` — TTS is
 billed per character.
@@ -162,3 +196,5 @@ Per-turn token and cost estimates log to the dev console.
   the mock replica is built against the same config so it stays honest.
 - **10 Indic languages are detected, 5 have full mock wording.** Live mode
   covers the rest via Gemini. `detect.ts` is the single place to extend.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the full locked-down architecture.
+- Each repo's `README.md` for its own run instructions.
