@@ -106,9 +106,10 @@ function offlineLineFor(det: DetectedLang): string {
   if (det.latin && OFFLINE_LATN[det.base]) return OFFLINE_LATN[det.base]!;
   return OFFLINE_LINES[det.base] ?? OFFLINE_LINES.en!;
 }
-import { createLLM } from "@/providers/registry";
-import type { LLMProvider } from "@/providers/types";
+import { createLLM, createSTT, createTTS } from "@/providers/registry";
+import type { LLMProvider, STTProvider, TTSProvider } from "@/providers/types";
 import { config } from "@/shared/config";
+import { truncateForSpeech } from "@/agent/guardrails";
 
 export interface AgentController {
   state: GrievanceState;
@@ -131,6 +132,8 @@ export interface AgentController {
  */
 export class Conversation {
   private llm: LLMProvider;
+  private stt: STTProvider;
+  private tts: TTSProvider;
   private listeners = new Set<(c: AgentController) => void>();
 
   state: GrievanceState = emptyState();
@@ -164,8 +167,10 @@ export class Conversation {
   private draftFinalize = false;
   private proofTries = 0;
 
-  constructor(deps?: Partial<{ llm: LLMProvider }>) {
+  constructor(deps?: Partial<{ llm: LLMProvider; stt: STTProvider; tts: TTSProvider }>) {
     this.llm = deps?.llm ?? createLLM();
+    this.stt = deps?.stt ?? createSTT();
+    this.tts = deps?.tts ?? createTTS();
   }
 
   subscribe(fn: (c: AgentController) => void): () => void {
@@ -351,13 +356,6 @@ export class Conversation {
         this.state = { ...this.state, priorContactConfirmed: true };
       }
 
-      // Suppress eager email generation: if we are still collecting pre-send
-      // placeholders (Name, Phone), the model is strictly forbidden from
-      // generating the draft until we are finished.
-      if (this.draftCompletion && turn.nextAction === "draft_email") {
-        turn = { ...turn, nextAction: "none" };
-      }
-
       // Agreement override: the draft must never depend solely on the model's
       // action field. Seen live: the reply said "here is the email draft"
       // while nextAction stayed "none" (or was phase-suppressed), so no card
@@ -471,6 +469,7 @@ export class Conversation {
       this.busy = false;
       this.emit();
 
+      if (config.spokenReplies) void this.speak(turn.reply);
       return agentTurn;
     } catch (e) {
       this.busy = false;
@@ -1089,8 +1088,26 @@ export class Conversation {
     this.emit();
   }
 
+  async transcribe(audio: Blob, langHint?: string): Promise<string> {
+    const { text } = await this.stt.transcribe(audio, langHint);
+    return text;
+  }
 
+  private async speak(text: string): Promise<void> {
+    try {
+      const short = truncateForSpeech(text, config.maxSpokenSentences);
+      const blob = await this.tts.speak(short, this.state.userLanguage);
+      await new Audio(URL.createObjectURL(blob)).play();
+    } catch (e) {
+      console.warn("[sarthi] tts failed", e);
+    }
+  }
 
+  /** TTS off by default because it costs money per character. */
+  setSpokenReplies(on: boolean): void {
+    config.spokenReplies = on;
+    this.emit();
+  }
 }
 
 /** Question for one pre-send placeholder. Retry adds a soft apology lead. */

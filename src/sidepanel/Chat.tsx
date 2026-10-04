@@ -11,6 +11,8 @@ export function Chat({
   history,
   busy,
   onSend,
+  onMic,
+  recording,
   onOpenGmail,
   onEmailSent,
   gmailFailed,
@@ -21,6 +23,8 @@ export function Chat({
   history: ChatTurn[];
   busy: boolean;
   onSend: (t: string) => void;
+  onMic: () => void;
+  recording: boolean;
   onOpenGmail: (d: EmailDraft) => void;
   onEmailSent: () => void;
   gmailFailed: boolean;
@@ -102,6 +106,18 @@ export function Chat({
 
       <div className="border-t border-slate-200 bg-white px-3 py-3">
         <div className="flex items-end gap-2">
+          <button
+            onClick={onMic}
+            aria-label={recording ? "Stop recording" : "Speak"}
+            title={recording ? "Stop" : "Speak (Chrome only)"}
+            className={
+              recording
+                ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"
+                : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-lg hover:bg-slate-50"
+            }
+          >
+            {recording ? "■" : "🎤"}
+          </button>
           <textarea
             ref={textRef}
             rows={1}
@@ -130,7 +146,7 @@ export function Chat({
           </button>
         </div>
         <p className="mt-2 text-center text-[11px] text-slate-400">
-          Type in any language. CAPTCHAs and the final Submit stay with you.
+          Speak or type in any language. CAPTCHAs and the final Submit stay with you.
         </p>
       </div>
     </div>
