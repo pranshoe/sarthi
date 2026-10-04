@@ -65,8 +65,7 @@ export function has(state: GrievanceState, key: FieldKey): boolean {
  * Skipped fields (asked twice, never answered) are excluded for good.
  */
 export function missingFields(state: GrievanceState): FieldKey[] {
-  const skipped = new Set(state.skippedFields);
-  return REQUIRED_FOR_REVIEW.filter((k) => !skipped.has(k) && !has(state, k));
+  return REQUIRED_FOR_REVIEW.filter((k) => !has(state, k));
 }
 
 /**

@@ -3,7 +3,8 @@ import { Conversation, type AgentController } from "./conversation";
 import { Chat } from "./Chat";
 import { UnderstoodCard } from "./UnderstoodCard";
 import { ReviewChecklist } from "./ReviewChecklist";
-import { useMic } from "./MicButton";
+import { IepfValidator } from "./IepfValidator";
+import { AffidavitCopilot } from "./AffidavitCopilot";
 import { config } from "@/shared/config";
 import type { Attachment, EmailDraft, FillReport } from "@/shared/types";
 
@@ -14,7 +15,6 @@ export function App() {
   const [report, setReport] = useState<FillReport | null>(null);
   const [consent, setConsent] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [spoken, setSpoken] = useState(config.spokenReplies);
   const started = useRef(false);
   // History length the chat-driven autofill already fired for. Guards the
   // edge trigger below against re-firing on every re-render.
@@ -37,8 +37,6 @@ export function App() {
     }
     return unsub;
   }, [conv]);
-
-  const mic = useMic((text) => void conv.send(text));
 
   /** Compose tab only. We never touch Gmail's DOM and never send anything. */
   async function openGmail(draft: EmailDraft) {
@@ -140,17 +138,6 @@ export function App() {
 
         {showSettings && (
           <div className="mx-3 mb-3 mt-2 space-y-2 rounded-xl bg-black/20 p-2.5 text-[12px]">
-            <label className="flex items-center justify-between gap-2">
-              <span>Spoken replies (costs credits)</span>
-              <input
-                type="checkbox"
-                checked={spoken}
-                onChange={(e) => {
-                  setSpoken(e.target.checked);
-                  conv.setSpokenReplies(e.target.checked);
-                }}
-              />
-            </label>
             <div className="text-[11px] opacity-80">
               Mode: {config.mockMode ? "mock, 0 credits" : `live via ${config.llm}`} · proxy
               {config.proxyUrl}
@@ -191,8 +178,6 @@ export function App() {
             history={snap.history}
             busy={snap.busy}
             onSend={(t) => void conv.send(t)}
-            onMic={mic.toggle}
-            recording={mic.recording}
             onOpenGmail={(d) => void openGmail(d)}
             onEmailSent={() => conv.confirmEmailSent()}
             gmailFailed={snap.gmailFailed}
@@ -223,11 +208,6 @@ export function App() {
 )}
               </pre>
             </details>
-          )}
-          {mic.note && (
-            <div className="bg-slate-100 px-3 py-1.5 text-center text-[11.5px] text-slate-600">
-              {mic.note}
-            </div>
           )}
         </>
       ) : (
